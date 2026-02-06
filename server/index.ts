@@ -76,17 +76,48 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize server
-try {
-  setupAuth(app);
-  log("✓ Auth setup completed");
+// Flag and promise for initialization
+let isInitialized = false;
+let initError: Error | null = null;
 
-  registerRoutes(httpServer!, app);
-  log("✓ Routes registered");
-} catch (err) {
-  log(`✗ Critical error during initialization: ${err}`);
-  console.error(err);
-}
+const initPromise = (async () => {
+  try {
+    await setupAuth(app);
+    log("✓ Auth setup completed");
+
+    registerRoutes(httpServer!, app);
+    log("✓ Routes registered");
+
+    isInitialized = true;
+  } catch (err: any) {
+    log(`✗ Critical error during initialization: ${err}`);
+    initError = err;
+    throw err;
+  }
+})();
+
+// Middleware to ensure server is initialized
+app.use(async (req, res, next) => {
+  if (initError) {
+    return res.status(500).json({
+      error: "Erro na inicialização do servidor",
+      details: initError.message,
+      stack: initError.stack
+    });
+  }
+
+  if (!isInitialized) {
+    try {
+      await initPromise;
+    } catch (err: any) {
+      return res.status(500).json({
+        error: "Falha na inicialização",
+        details: err.message
+      });
+    }
+  }
+  next();
+});
 
 // Error handling middleware (should be after routes)
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
