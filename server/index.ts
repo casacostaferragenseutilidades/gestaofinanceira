@@ -140,7 +140,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 
 export { app, httpServer };
 
-if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
+if (process.env.NODE_ENV !== "test" && !process.env.VERCEL && !process.env.NETLIFY) {
   (async () => {
     try {
       // Test database connection
