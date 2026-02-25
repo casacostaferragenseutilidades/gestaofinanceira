@@ -515,8 +515,123 @@ export function registerRoutes(
     res.json(account);
   });
 
+  app.post("/api/accounts-receivable/bulk-receive", requireFinancial, async (req, res) => {
+    try {
+      const { ids, receivedDate, paymentMethod } = req.body;
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "Lista de IDs inválida" });
+      }
+      const updated = await storage.bulkMarkAccountsReceivableAsReceived(ids, receivedDate, paymentMethod);
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error in bulk receive:", error);
+      res.status(500).json({ error: "Erro ao processar recebimento em massa", details: error.message });
+    }
+  });
+
   app.delete("/api/accounts-receivable/:id", requireFinancial, async (req, res) => {
     await storage.deleteAccountReceivable(req.params.id);
+    res.status(204).send();
+  });
+
+  // Card Transactions Routes (PDR)
+  app.get("/api/card-transactions", requireViewer, async (req, res) => {
+    let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+    if (Array.isArray(companyId)) { companyId = companyId.includes('all') ? 'all' : companyId[0]; }
+    else if (typeof companyId === 'string' && companyId.includes(',')) { const parts = companyId.split(','); companyId = parts.includes('all') ? 'all' : parts[0]; }
+
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+
+    const transactions = await storage.getCardTransactions(companyId, startDate, endDate);
+    res.json(transactions);
+  });
+
+  app.get("/api/card-transactions/:id", requireViewer, async (req, res) => {
+    const transaction = await storage.getCardTransaction(req.params.id);
+    if (!transaction) return res.status(404).json({ error: "Transaction not found" });
+    res.json(transaction);
+  });
+
+  app.post("/api/card-transactions", requireFinancial, async (req, res) => {
+    try {
+      const companyId = req.headers['x-company-id'] as string;
+      const transaction = await storage.createCardTransaction({ ...req.body, companyId });
+      res.status(201).json(transaction);
+    } catch (err) {
+      res.status(400).json({ error: "Error creating card transaction" });
+    }
+  });
+
+  app.patch("/api/card-transactions/:id", requireFinancial, async (req, res) => {
+    try {
+      if (req.body.feePercentage !== undefined && req.user?.role !== "admin") {
+        // If they are trying to change fee but are not admin, we could either error or just omit it.
+        // PRD says "Apenas administradores podem alterar taxas".
+        const existing = await storage.getCardTransaction(req.params.id);
+        if (existing && existing.feePercentage !== req.body.feePercentage) {
+          return res.status(403).json({ error: "Apenas administradores podem alterar taxas" });
+        }
+      }
+      const transaction = await storage.updateCardTransaction(req.params.id, req.body);
+      if (!transaction) return res.status(404).json({ error: "Transaction not found" });
+      res.json(transaction);
+    } catch (err) {
+      res.status(400).json({ error: "Erro ao atualizar transação" });
+    }
+  });
+
+  app.delete("/api/card-transactions/:id", requireFinancial, async (req, res) => {
+    const success = await storage.deleteCardTransaction(req.params.id);
+    if (!success) return res.status(404).json({ error: "Transaction not found" });
+    res.status(204).send();
+  });
+
+  // Bank Accounts Routes
+  app.get("/api/bank-accounts", requireViewer, async (req, res) => {
+    let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+    const accounts = await storage.getBankAccounts(companyId);
+    res.json(accounts);
+  });
+
+  app.post("/api/bank-accounts", requireFinancial, async (req, res) => {
+    const companyId = req.headers['x-company-id'] as string;
+    const account = await storage.createBankAccount({ ...req.body, companyId });
+    res.status(201).json(account);
+  });
+
+  app.patch("/api/bank-accounts/:id", requireFinancial, async (req, res) => {
+    const account = await storage.updateBankAccount(req.params.id, req.body);
+    if (!account) return res.status(404).json({ error: "Not found" });
+    res.json(account);
+  });
+
+  app.delete("/api/bank-accounts/:id", requireFinancial, async (req, res) => {
+    await storage.deleteBankAccount(req.params.id);
+    res.status(204).send();
+  });
+
+  // Payment Configs (Taxas) Routes
+  app.get("/api/payment-configs", requireViewer, async (req, res) => {
+    let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+    const configs = await storage.getPaymentConfigs(companyId);
+    res.json(configs);
+  });
+
+  app.post("/api/payment-configs", requireFinancial, async (req, res) => {
+    const companyId = req.headers['x-company-id'] as string;
+    const config = await storage.createPaymentConfig({ ...req.body, companyId });
+    res.status(201).json(config);
+  });
+
+  app.patch("/api/payment-configs/:id", requireFinancial, async (req, res) => {
+    const config = await storage.updatePaymentConfig(req.params.id, req.body);
+    if (!config) return res.status(404).json({ error: "Not found" });
+    res.json(config);
+  });
+
+  app.delete("/api/payment-configs/:id", requireFinancial, async (req, res) => {
+    await storage.deletePaymentConfig(req.params.id);
     res.status(204).send();
   });
 

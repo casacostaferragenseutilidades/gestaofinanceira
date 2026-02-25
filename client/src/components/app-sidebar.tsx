@@ -65,6 +65,13 @@ const mainNavItems = [
     badge: null,
   },
   {
+    title: "Recebimentos PDR",
+    url: "/controle-recebimentos",
+    icon: CreditCard,
+    description: "Controle de Cartão e PIX",
+    badge: null,
+  },
+  {
     title: "Fluxo de Caixa",
     url: "/fluxo-caixa",
     icon: TrendingUp,
@@ -139,6 +146,11 @@ const settingsNavItems = [
         url: "/centros-custo",
         icon: FolderTree,
       },
+      {
+        title: "Taxas e Máquinas",
+        url: "/configuracoes-pagamento",
+        icon: Settings,
+      },
     ],
   },
 ];
@@ -158,8 +170,8 @@ export function AppSidebar() {
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const toggleExpanded = (title: string) => {
-    setExpandedItems(prev => 
-      prev.includes(title) 
+    setExpandedItems(prev =>
+      prev.includes(title)
         ? prev.filter(item => item !== title)
         : [...prev, title]
     );
@@ -209,7 +221,7 @@ export function AppSidebar() {
                 const isActive = location === item.url || isSubItemActive(item.subItems);
                 const isExpanded = expandedItems.includes(item.title);
                 const hasSubItems = item.subItems && item.subItems.length > 0;
-                
+
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
@@ -245,7 +257,7 @@ export function AppSidebar() {
                         </Link>
                       )}
                     </SidebarMenuButton>
-                    
+
                     {hasSubItems && isExpanded && (
                       <SidebarMenuSub className="ml-6 mt-1 space-y-0.5 group-data-[state=collapsed]:hidden">
                         {item.subItems!.map((subItem) => {
@@ -272,9 +284,9 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        
+
         <Separator className="my-1 bg-sidebar-border/50 group-data-[state=collapsed]:my-0.5" />
-        
+
         <SidebarGroup>
           <SidebarGroupLabel className="px-2 text-xs font-semibold text-muted-foreground/70 tracking-wider uppercase">
             Cadastros
@@ -285,7 +297,7 @@ export function AppSidebar() {
                 const isActive = location === item.url || isSubItemActive(item.subItems);
                 const isExpanded = expandedItems.includes(item.title);
                 const hasSubItems = item.subItems && item.subItems.length > 0;
-                
+
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
@@ -316,7 +328,7 @@ export function AppSidebar() {
                         </Link>
                       )}
                     </SidebarMenuButton>
-                    
+
                     {hasSubItems && isExpanded && (
                       <SidebarMenuSub className="ml-6 mt-1 space-y-0.5 group-data-[state=collapsed]:hidden">
                         {item.subItems!.map((subItem) => {
@@ -378,15 +390,15 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-2 border-t border-sidebar-border/50 group-data-[state=collapsed]:p-1">
         <div className="space-y-2">
-          <Button 
-            variant="outline" 
-            className="w-full gap-2 h-8 transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-10 group-data-[state=collapsed]:h-10" 
+          <Button
+            variant="outline"
+            className="w-full gap-2 h-8 transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-10 group-data-[state=collapsed]:h-10"
             data-testid="button-sync-mercadopago"
           >
             <RefreshCw className="h-4 w-4 transition-transform duration-200 group-hover:rotate-180 flex-shrink-0" />
             <span className="truncate group-data-[state=collapsed]:hidden">Sincronizar</span>
           </Button>
-          
+
           <div className="flex items-center gap-2 px-1 py-1 rounded-lg bg-muted/50 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-10 group-data-[state=collapsed]:h-10">
             <div className="h-6 w-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
               {user?.fullName?.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() || 'U'}

@@ -9,6 +9,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupAuth } from "./auth";
 import { serveStatic } from "./static";
+import { setupVite } from "./vite";
 import { createServer } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
@@ -87,6 +88,12 @@ const initPromise = (async () => {
 
     registerRoutes(httpServer!, app);
     log("✓ Routes registered");
+
+    if (app.get("env") === "development") {
+      await setupVite(httpServer!, app);
+    } else {
+      serveStatic(app);
+    }
 
     isInitialized = true;
   } catch (err: any) {

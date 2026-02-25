@@ -45,6 +45,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -150,6 +151,7 @@ export default function AccountsReceivable() {
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [newClientDialogOpen, setNewClientDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const { toast } = useToast();
 
   const { data: accounts, isLoading } = useQuery<AccountReceivable[]>({
@@ -378,6 +380,28 @@ export default function AccountsReceivable() {
       toast({
         title: "Erro",
         description: "Não foi possível marcar a conta como recebida.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkMarkAsReceivedMutation = useMutation({
+    mutationFn: (data: { ids: string[]; receivedDate: string; paymentMethod?: string }) =>
+      apiRequest("POST", "/api/accounts-receivable/bulk-receive", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts-receivable"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cash-flow"] });
+      setSelectedAccounts([]);
+      toast({
+        title: "Sucesso",
+        description: "Contas marcadas como recebidas com sucesso.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível processar o recebimento em massa.",
         variant: "destructive",
       });
     },
@@ -969,6 +993,44 @@ export default function AccountsReceivable() {
             <div>
               <CardTitle className="text-lg">Lista de Contas</CardTitle>
             </div>
+            {selectedAccounts.length > 0 && (
+              <div className="flex items-center gap-4 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg animate-in fade-in slide-in-from-top-1">
+                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  {selectedAccounts.length} {selectedAccounts.length === 1 ? 'item selecionado' : 'itens selecionados'}
+                </span>
+                <div className="h-4 w-px bg-blue-200 dark:bg-blue-800" />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (window.confirm(`Deseja marcar ${selectedAccounts.length} contas como recebidas hoje?`)) {
+                      bulkMarkAsReceivedMutation.mutate({
+                        ids: selectedAccounts,
+                        receivedDate: new Date().toISOString().split('T')[0],
+                        paymentMethod: 'pix' // Defaulting to PIX for bulk received or just unset
+                      });
+                    }
+                  }}
+                  disabled={bulkMarkAsReceivedMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700 text-white h-8"
+                >
+                  {bulkMarkAsReceivedMutation.isPending ? (
+                    <span className="animate-spin mr-2">⏳</span>
+                  ) : (
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                  )}
+                  Marcar como Recebido
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedAccounts([])}
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:hover:bg-blue-800 h-8"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Limpar
+                </Button>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
                 <div className="relative">
@@ -1095,6 +1157,21 @@ export default function AccountsReceivable() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-[40px]">
+                          <Checkbox
+                            checked={
+                              filteredAccounts.length > 0 &&
+                              selectedAccounts.length === filteredAccounts.filter(a => a.status !== 'received').length
+                            }
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedAccounts(filteredAccounts.filter(a => a.status !== 'received').map(a => a.id));
+                              } else {
+                                setSelectedAccounts([]);
+                              }
+                            }}
+                          />
+                        </TableHead>
                         <TableHead>Descrição</TableHead>
                         <TableHead>Cliente</TableHead>
                         <TableHead>Categoria</TableHead>
@@ -1120,134 +1197,147 @@ export default function AccountsReceivable() {
 
                         return (
                           <TableRow key={account.id} data-testid={`row-receivable-${account.id}`}>
-                        <TableCell className="font-medium">
-                          {account.description}
-                        </TableCell>
-                        <TableCell>
-                          {client ? (
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <span>{client.name}</span>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {category ? (
-                            <Badge variant="secondary" className="font-normal">
-                              {category.name}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span>{formatDate(account.dueDate)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-green-600 dark:text-green-400">
-                          {formatCurrency(account.amount)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {account.discount && account.discount !== null ? (
-                            <span className="text-red-600 font-medium">
-                              {formatCurrency(account.discount)}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-bold">
-                          {formatCurrency(netValue.toFixed(2))}
-                        </TableCell>
-                        <TableCell>
-                          {account.paymentMethod ? (
-                            <Badge variant="outline" className="font-normal capitalize">
-                              {account.paymentMethod === 'money' ? 'Dinheiro' :
-                                account.paymentMethod === 'pix' ? 'PIX' :
-                                  account.paymentMethod === 'credit_card' ? 'Cartão de Crédito' :
-                                    account.paymentMethod === 'debit_card' ? 'Cartão de Débito' :
-                                      account.paymentMethod === 'boleto' ? 'Boleto' :
-                                        account.paymentMethod === 'transfer' ? 'Transferência' : account.paymentMethod}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {account.receivedDate ? (
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className="h-4 w-4 text-green-500" />
-                              <span className="text-green-600">{formatDate(account.receivedDate)}</span>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(displayStatus)}>
-                            {getStatusLabel(displayStatus)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" data-testid={`button-actions-${account.id}`}>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => handleClone(account)}
-                                data-testid={`button-clone-${account.id}`}
-                              >
-                                <Copy className="h-4 w-4 mr-2" />
-                                Clonar Lançamento
-                              </DropdownMenuItem>
-                              {account.status !== "received" && (
-                                <DropdownMenuItem
-                                  onClick={() => handleMarkAsReceived(account)}
-                                  data-testid={`button-mark-received-${account.id}`}
-                                >
-                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                  Marcar como Recebido
-                                </DropdownMenuItem>
+                            <TableCell>
+                              <Checkbox
+                                disabled={account.status === 'received'}
+                                checked={selectedAccounts.includes(account.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedAccounts([...selectedAccounts, account.id]);
+                                  } else {
+                                    setSelectedAccounts(selectedAccounts.filter(id => id !== account.id));
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {account.description}
+                            </TableCell>
+                            <TableCell>
+                              {client ? (
+                                <div className="flex items-center gap-2">
+                                  <Users className="h-4 w-4 text-muted-foreground" />
+                                  <span>{client.name}</span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
                               )}
-                              <DropdownMenuItem
-                                onClick={() => handleEdit(account)}
-                                data-testid={`button-edit-${account.id}`}
-                                disabled={account.status === "received"}
-                              >
-                                <Pencil className="h-4 w-4 mr-2" />
-                                Editar
-                                {account.status === "received" && (
-                                  <span className="ml-2 text-xs text-gray-400">(Não disponível)</span>
-                                )}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => deleteMutation.mutate(account.id)}
-                                data-testid={`button-delete-${account.id}`}
-                                className="text-red-600"
-                                disabled={account.status === "received"}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Desativar
-                                {account.status === "received" && (
-                                  <span className="ml-2 text-xs text-gray-400">(Não disponível)</span>
-                                )}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                            </TableCell>
+                            <TableCell>
+                              {category ? (
+                                <Badge variant="secondary" className="font-normal">
+                                  {category.name}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                <span>{formatDate(account.dueDate)}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-green-600 dark:text-green-400">
+                              {formatCurrency(account.amount)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {account.discount && account.discount !== null ? (
+                                <span className="text-red-600 font-medium">
+                                  {formatCurrency(account.discount)}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-bold">
+                              {formatCurrency(netValue.toFixed(2))}
+                            </TableCell>
+                            <TableCell>
+                              {account.paymentMethod ? (
+                                <Badge variant="outline" className="font-normal capitalize">
+                                  {account.paymentMethod === 'money' ? 'Dinheiro' :
+                                    account.paymentMethod === 'pix' ? 'PIX' :
+                                      account.paymentMethod === 'credit_card' ? 'Cartão de Crédito' :
+                                        account.paymentMethod === 'debit_card' ? 'Cartão de Débito' :
+                                          account.paymentMethod === 'boleto' ? 'Boleto' :
+                                            account.paymentMethod === 'transfer' ? 'Transferência' : account.paymentMethod}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {account.receivedDate ? (
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                  <span className="text-green-600">{formatDate(account.receivedDate)}</span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={getStatusColor(displayStatus)}>
+                                {getStatusLabel(displayStatus)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" data-testid={`button-actions-${account.id}`}>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => handleClone(account)}
+                                    data-testid={`button-clone-${account.id}`}
+                                  >
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    Clonar Lançamento
+                                  </DropdownMenuItem>
+                                  {account.status !== "received" && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleMarkAsReceived(account)}
+                                      data-testid={`button-mark-received-${account.id}`}
+                                    >
+                                      <CheckCircle className="h-4 w-4 mr-2" />
+                                      Marcar como Recebido
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem
+                                    onClick={() => handleEdit(account)}
+                                    data-testid={`button-edit-${account.id}`}
+                                    disabled={account.status === "received"}
+                                  >
+                                    <Pencil className="h-4 w-4 mr-2" />
+                                    Editar
+                                    {account.status === "received" && (
+                                      <span className="ml-2 text-xs text-gray-400">(Não disponível)</span>
+                                    )}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => deleteMutation.mutate(account.id)}
+                                    data-testid={`button-delete-${account.id}`}
+                                    className="text-red-600"
+                                    disabled={account.status === "received"}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Desativar
+                                    {account.status === "received" && (
+                                      <span className="ml-2 text-xs text-gray-400">(Não disponível)</span>
+                                    )}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               ) : (
                 // Visualização em Cards
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1264,9 +1354,22 @@ export default function AccountsReceivable() {
                       <Card key={account.id} className="hover:shadow-lg transition-all duration-200 group">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between mb-3">
-                            <Badge className={getStatusColor(displayStatus)}>
-                              {getStatusLabel(displayStatus)}
-                            </Badge>
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                disabled={account.status === 'received'}
+                                checked={selectedAccounts.includes(account.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedAccounts([...selectedAccounts, account.id]);
+                                  } else {
+                                    setSelectedAccounts(selectedAccounts.filter(id => id !== account.id));
+                                  }
+                                }}
+                              />
+                              <Badge className={getStatusColor(displayStatus)}>
+                                {getStatusLabel(displayStatus)}
+                              </Badge>
+                            </div>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1275,7 +1378,7 @@ export default function AccountsReceivable() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onClick={() => handleReceive(account)}
+                                  onClick={() => handleMarkAsReceived(account)}
                                   data-testid={`button-receive-${account.id}`}
                                 >
                                   <DollarSign className="h-4 w-4 mr-2" />
@@ -1307,11 +1410,11 @@ export default function AccountsReceivable() {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
-                          
+
                           <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">
                             {account.description}
                           </h3>
-                          
+
                           <div className="space-y-2 mb-3">
                             <div className="flex items-center justify-between">
                               <span className="text-sm text-muted-foreground">Cliente:</span>
@@ -1319,55 +1422,55 @@ export default function AccountsReceivable() {
                                 {client ? client.name : "-"}
                               </span>
                             </div>
-                            
+
                             <div className="flex items-center justify-between">
                               <span className="text-sm text-muted-foreground">Categoria:</span>
                               <span className="text-sm font-medium">
                                 {category ? category.name : "-"}
                               </span>
                             </div>
-                            
+
                             <div className="flex items-center justify-between">
                               <span className="text-sm text-muted-foreground">Vencimento:</span>
                               <span className="text-sm font-medium">{formatDate(account.dueDate)}</span>
                             </div>
                           </div>
-                          
+
                           <div className="border-t pt-3 space-y-2">
                             <div className="flex items-center justify-between">
                               <span className="text-sm text-muted-foreground">Valor:</span>
                               <span className="font-bold text-lg text-green-600">{formatCurrency(account.amount)}</span>
                             </div>
-                            
+
                             {discountNum > 0 && (
                               <div className="flex items-center justify-between">
                                 <span className="text-sm text-muted-foreground">Desconto:</span>
                                 <span className="font-medium text-red-600">-{formatCurrency(account.discount)}</span>
                               </div>
                             )}
-                            
+
                             <div className="flex items-center justify-between">
                               <span className="text-sm text-muted-foreground">Valor Líquido:</span>
                               <span className="font-bold text-lg">{formatCurrency(netValue.toFixed(2))}</span>
                             </div>
-                            
+
                             {account.receivedDate && (
                               <div className="flex items-center justify-between">
                                 <span className="text-sm text-muted-foreground">Recebido em:</span>
                                 <span className="text-sm font-medium text-green-600">{formatDate(account.receivedDate)}</span>
                               </div>
                             )}
-                            
+
                             {account.paymentMethod && (
                               <div className="flex items-center justify-between">
                                 <span className="text-sm text-muted-foreground">Forma Pagto:</span>
                                 <Badge variant="outline" className="font-normal capitalize">
                                   {account.paymentMethod === 'money' ? 'Dinheiro' :
-                                   account.paymentMethod === 'pix' ? 'PIX' :
-                                   account.paymentMethod === 'credit_card' ? 'Cartão de Crédito' :
-                                   account.paymentMethod === 'debit_card' ? 'Cartão de Débito' :
-                                   account.paymentMethod === 'boleto' ? 'Boleto' :
-                                   account.paymentMethod === 'transfer' ? 'Transferência' : account.paymentMethod}
+                                    account.paymentMethod === 'pix' ? 'PIX' :
+                                      account.paymentMethod === 'credit_card' ? 'Cartão de Crédito' :
+                                        account.paymentMethod === 'debit_card' ? 'Cartão de Débito' :
+                                          account.paymentMethod === 'boleto' ? 'Boleto' :
+                                            account.paymentMethod === 'transfer' ? 'Transferência' : account.paymentMethod}
                                 </Badge>
                               </div>
                             )}
@@ -1388,7 +1491,7 @@ export default function AccountsReceivable() {
           )}
         </CardContent>
       </Card>
-      
+
       {/* Payment Confirmation Dialog */}
       <Dialog open={paymentDialogOpen} onOpenChange={handlePaymentDialogOpenChange}>
         <DialogContent>
@@ -1399,80 +1502,80 @@ export default function AccountsReceivable() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Data do Recebimento</label>
-                <Input
-                  type="date"
-                  value={receivedDate}
-                  onChange={(e) => setReceivedDate(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Valor Original</label>
-                <p className="text-lg font-semibold">
-                  {accountToReceive && formatCurrency(accountToReceive.amount)}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Desconto (opcional)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00"
-                  onChange={(e) => {
-                    if (accountToReceive) {
-                      setAccountToReceive({ ...accountToReceive, discount: e.target.value });
-                    }
-                  }}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Valor Líquido</label>
-                <p className="text-lg font-semibold">
-                  {accountToReceive && formatCurrency((parseFloat(accountToReceive.amount?.toString() || "0") - parseFloat(accountToReceive.discount?.toString() || "0")).toFixed(2))}
-                </p>
-              </div>
-              {accountToReceive && accountToReceive.paymentDate && (
-                <div>
-                  <label className="text-sm font-medium">Forma de Pagamento</label>
-                  <Badge variant="outline" className="font-normal capitalize">
-                    {accountToReceive.paymentMethod === 'money' ? 'Dinheiro' :
-                     accountToReceive.paymentMethod === 'pix' ? 'PIX' :
-                     accountToReceive.paymentMethod === 'credit_card' ? 'Cartão de Crédito' :
-                     accountToReceive.paymentMethod === 'debit_card' ? 'Cartão de Débito' :
-                     accountToReceive.paymentMethod === 'boleto' ? 'Boleto' :
-                     accountToReceive.paymentMethod === 'transfer' ? 'Transferência' : accountToReceive.paymentMethod}
-                  </Badge>
-                </div>
-              )}
+            <div>
+              <label className="text-sm font-medium">Data do Recebimento</label>
+              <Input
+                type="date"
+                value={receivedDate}
+                onChange={(e) => setReceivedDate(e.target.value)}
+                className="mt-1"
+              />
             </div>
-            <DialogFooter className="gap-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPaymentDialogOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                disabled={markAsReceivedMutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700"
-                onClick={() => {
+            <div>
+              <label className="text-sm font-medium">Valor Original</label>
+              <p className="text-lg font-semibold">
+                {accountToReceive && formatCurrency(accountToReceive.amount)}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Desconto (opcional)</label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="0,00"
+                onChange={(e) => {
                   if (accountToReceive) {
-                    markAsReceivedMutation.mutate({
-                      id: accountToReceive.id,
-                      discount: accountToReceive.discount || "",
-                      receivedDate: receivedDate,
-                      paymentMethod: paymentMethod
-                    });
+                    setAccountToReceive({ ...accountToReceive, discount: e.target.value });
                   }
                 }}
-              >
-                {markAsReceivedMutation.isPending ? "Salvando..." : "Confirmar Recebimento"}
-              </Button>
-            </DialogFooter>
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Valor Líquido</label>
+              <p className="text-lg font-semibold">
+                {accountToReceive && formatCurrency((parseFloat(accountToReceive.amount?.toString() || "0") - parseFloat(accountToReceive.discount?.toString() || "0")).toFixed(2))}
+              </p>
+            </div>
+            {accountToReceive && accountToReceive.paymentDate && (
+              <div>
+                <label className="text-sm font-medium">Forma de Pagamento</label>
+                <Badge variant="outline" className="font-normal capitalize">
+                  {accountToReceive.paymentMethod === 'money' ? 'Dinheiro' :
+                    accountToReceive.paymentMethod === 'pix' ? 'PIX' :
+                      accountToReceive.paymentMethod === 'credit_card' ? 'Cartão de Crédito' :
+                        accountToReceive.paymentMethod === 'debit_card' ? 'Cartão de Débito' :
+                          accountToReceive.paymentMethod === 'boleto' ? 'Boleto' :
+                            accountToReceive.paymentMethod === 'transfer' ? 'Transferência' : accountToReceive.paymentMethod}
+                </Badge>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPaymentDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={markAsReceivedMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => {
+                if (accountToReceive) {
+                  markAsReceivedMutation.mutate({
+                    id: accountToReceive.id,
+                    discount: accountToReceive.discount || "",
+                    receivedDate: receivedDate,
+                    paymentMethod: paymentMethod
+                  });
+                }
+              }}
+            >
+              {markAsReceivedMutation.isPending ? "Salvando..." : "Confirmar Recebimento"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

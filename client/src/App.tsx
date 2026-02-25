@@ -31,6 +31,8 @@ import UsersPage from "@/pages/users";
 import Login from "@/pages/login";
 import NotesPage from "@/pages/notes";
 import EmpresasPage from "@/pages/EmpresasPage";
+import ReceiptsControl from "@/pages/receipts-control";
+import PaymentSettings from "@/pages/payment-settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -42,6 +44,8 @@ function Router() {
       <Route path="/fluxo-caixa" component={CashFlow} />
       <Route path="/dre" component={DRE} />
       <Route path="/metas-financeiras" component={FinancialGoals} />
+      <Route path="/controle-recebimentos" component={ReceiptsControl} />
+      <Route path="/configuracoes-pagamento" component={PaymentSettings} />
       <Route path="/relatorios" component={Reports} />
       <Route path="/fornecedores" component={Suppliers} />
       <Route path="/fornecedores/:id" component={SupplierDetails} />

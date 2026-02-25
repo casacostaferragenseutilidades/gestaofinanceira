@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -36,6 +36,14 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { formatCurrency, formatDate, getDaysUntilDue, getStatusColor, getStatusLabel } from "@/lib/utils";
 import type { DashboardStats, CashFlowData, CategoryExpense, AccountPayable, AccountReceivable } from "@shared/schema";
 
@@ -163,6 +171,7 @@ export default function Dashboard() {
     return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
   });
   const [period, setPeriod] = useState('current');
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
 
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats", { startDate, endDate }],
@@ -208,6 +217,20 @@ export default function Dashboard() {
       return response.json();
     },
   });
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const pendingTodayPayables = upcomingPayables?.filter(p => p.dueDate <= todayStr) || [];
+  const pendingTodayReceivables = upcomingReceivables?.filter(r => r.dueDate <= todayStr) || [];
+  const totalPendencies = pendingTodayPayables.length + pendingTodayReceivables.length;
+
+  useEffect(() => {
+    const popupShown = sessionStorage.getItem('dashboard_popup_shown');
+    if (!popupShown && !payablesLoading && !receivablesLoading && totalPendencies > 0) {
+      setIsPopupOpen(true);
+      sessionStorage.setItem('dashboard_popup_shown', 'true');
+    }
+  }, [payablesLoading, receivablesLoading, totalPendencies]);
 
   const handlePeriodChange = (newPeriod: string) => {
     setPeriod(newPeriod);
@@ -571,6 +594,68 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isPopupOpen} onOpenChange={setIsPopupOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <AlertTriangle className="h-6 w-6 text-amber-500" />
+              Pendências de Hoje
+            </DialogTitle>
+            <DialogDescription>
+              Você tem {totalPendencies} {totalPendencies === 1 ? 'pendência' : 'pendências'} que {totalPendencies === 1 ? 'vence' : 'vencem'} hoje ou já {totalPendencies === 1 ? 'venceu' : 'venceram'}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto py-4 space-y-6">
+            {pendingTodayPayables.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-red-600 flex items-center gap-2">
+                  <ArrowDownRight className="h-4 w-4" />
+                  Contas a Pagar
+                </h3>
+                <div className="space-y-2">
+                  {pendingTodayPayables.map(payable => (
+                    <div key={payable.id} className="flex justify-between items-center p-3 rounded-lg bg-red-50 border border-red-100">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{payable.description}</p>
+                        <p className="text-xs text-red-600">Venceu em {formatDate(payable.dueDate)}</p>
+                      </div>
+                      <span className="font-bold text-slate-900">{formatCurrency(payable.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {pendingTodayReceivables.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-emerald-600 flex items-center gap-2">
+                  <ArrowUpRight className="h-4 w-4" />
+                  Contas a Receber
+                </h3>
+                <div className="space-y-2">
+                  {pendingTodayReceivables.map(receivable => (
+                    <div key={receivable.id} className="flex justify-between items-center p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{receivable.description}</p>
+                        <p className="text-xs text-emerald-600">Venceu em {formatDate(receivable.dueDate)}</p>
+                      </div>
+                      <span className="font-bold text-slate-900">{formatCurrency(receivable.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setIsPopupOpen(false)} className="w-full sm:w-auto">
+              Entendi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

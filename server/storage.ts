@@ -1,10 +1,11 @@
-import { eq, and, or, lt, lte, gte, sql } from "drizzle-orm";
+import { eq, and, or, lt, lte, gte, inArray, sql } from "drizzle-orm";
 import { db } from "./db";
+import { addDays, addMonths, addYears, format, parseISO } from "date-fns";
 console.log("[Storage] Module loading started...");
 import {
   users, suppliers, clients, categories, costCenters,
   accountsPayable, accountsReceivable, mercadoPagoTransactions, cashFlowEntries, balanceAdjustments, notes,
-  financialGoals, companies,
+  financialGoals, companies, cardTransactions, bankAccounts, paymentConfigs,
 } from "@shared/schema";
 import type {
   User, InsertUser,
@@ -15,6 +16,9 @@ import type {
   AccountPayable, InsertAccountPayable,
   AccountReceivable, InsertAccountReceivable,
   MercadoPagoTransaction, InsertMercadoPagoTransaction,
+  CardTransaction, InsertCardTransaction,
+  BankAccount, InsertBankAccount,
+  PaymentConfig, InsertPaymentConfig,
   DashboardStats, CashFlowData, DREData, CategoryExpense,
   CashFlowEntry, InsertCashFlowEntry, CashFlowKPIs, CashFlowAlert, DailyMovement,
   BalanceAdjustment, InsertBalanceAdjustment,
@@ -79,6 +83,7 @@ export interface IStorage {
   createAccountReceivable(account: InsertAccountReceivable): Promise<AccountReceivable>;
   updateAccountReceivable(id: string, account: Partial<InsertAccountReceivable>): Promise<AccountReceivable | undefined>;
   markAccountReceivableAsReceived(id: string, receivedDate: string, discount?: string, paymentMethod?: string): Promise<AccountReceivable | undefined>;
+  bulkMarkAccountsReceivableAsReceived(ids: string[], receivedDate: string, paymentMethod?: string): Promise<AccountReceivable[]>;
   deleteAccountReceivable(id: string): Promise<boolean>;
 
   getDashboardStats(startDate?: string, endDate?: string, companyId?: string): Promise<DashboardStats>;
@@ -110,6 +115,27 @@ export interface IStorage {
   createNote(note: InsertNote): Promise<Note>;
   updateNote(id: string, note: Partial<InsertNote>): Promise<Note | undefined>;
   deleteNote(id: string): Promise<boolean>;
+
+  // Card Transactions (PDR)
+  getCardTransactions(companyId?: string, startDate?: string, endDate?: string): Promise<CardTransaction[]>;
+  getCardTransaction(id: string): Promise<CardTransaction | undefined>;
+  createCardTransaction(transaction: InsertCardTransaction): Promise<CardTransaction>;
+  updateCardTransaction(id: string, transaction: Partial<InsertCardTransaction>): Promise<CardTransaction | undefined>;
+  deleteCardTransaction(id: string): Promise<boolean>;
+
+  // Bank Accounts
+  getBankAccounts(companyId?: string): Promise<BankAccount[]>;
+  getBankAccount(id: string): Promise<BankAccount | undefined>;
+  createBankAccount(account: InsertBankAccount): Promise<BankAccount>;
+  updateBankAccount(id: string, account: Partial<InsertBankAccount>): Promise<BankAccount | undefined>;
+  deleteBankAccount(id: string): Promise<boolean>;
+
+  // Payment Configs (Taxas)
+  getPaymentConfigs(companyId?: string): Promise<PaymentConfig[]>;
+  getPaymentConfig(id: string): Promise<PaymentConfig | undefined>;
+  createPaymentConfig(config: InsertPaymentConfig): Promise<PaymentConfig>;
+  updatePaymentConfig(id: string, config: Partial<InsertPaymentConfig>): Promise<PaymentConfig | undefined>;
+  deletePaymentConfig(id: string): Promise<boolean>;
 
   seedDefaultData(): Promise<void>;
 }
@@ -669,9 +695,6 @@ export class DatabaseStorage implements IStorage {
     console.log(`Updating Account Payable: ${id}, Recurrence: ${account.recurrence}, End: ${account.recurrenceEnd}`);
     const [updated] = await db.update(accountsPayable).set(account).where(eq(accountsPayable.id, id)).returning();
 
-    // If recurrence was added/updated, handle it (simplified: just call the same logic if we have enough info)
-    // Note: This could create duplicates if not careful, but usually we only do this on create.
-    // However, if the user manually triggers it by updating, we'll try to help.
     if (updated && account.recurrence && account.recurrence !== "none" && (account.recurrenceEnd || "").length > 0) {
       console.log(`Triggering recurrence update for ${id}`);
       await this.handleRecurrence(updated);
@@ -683,7 +706,7 @@ export class DatabaseStorage implements IStorage {
   private async handleRecurrence(account: AccountPayable) {
     const recEnd = (account.recurrenceEnd || "").trim();
     if (!account.recurrence || account.recurrence === "none" || recEnd.length === 0) {
-      console.log(`Canceling recurrence generation: incomplete data.`, { rec: account.recurrence, end: account.recurrenceEnd });
+      console.log(`[Recurrence-Payable] Canceling generation: incomplete data.`, { rec: account.recurrence, end: account.recurrenceEnd });
       return;
     }
 
@@ -691,31 +714,38 @@ export class DatabaseStorage implements IStorage {
     const startDateStr = account.dueDate.split('T')[0];
     const endDateStr = recEnd.split('T')[0];
 
-    const startDate = new Date(startDateStr + 'T12:00:00');
-    const endDate = new Date(endDateStr + 'T12:00:00');
+    const baseDate = parseISO(startDateStr);
+    const endDate = parseISO(endDateStr);
 
-    console.log(`Recurrence generation range: ${startDateStr} to ${endDateStr}`);
-
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      console.error("Invalid dates for recurrence:", { startDateStr, endDateStr });
+    if (isNaN(baseDate.getTime()) || isNaN(endDate.getTime())) {
+      console.error("[Recurrence-Payable] Invalid dates:", { startDateStr, endDateStr });
       return;
     }
 
-    let currentDate = new Date(startDate);
+    // Check for existing entries to avoid duplicates
+    const existingEntries = await db.select({ dueDate: accountsPayable.dueDate })
+      .from(accountsPayable)
+      .where(and(
+        eq(accountsPayable.description, account.description),
+        account.companyId ? eq(accountsPayable.companyId, account.companyId) : sql`${accountsPayable.companyId} IS NULL`
+      ));
+    const existingDates = new Set(existingEntries.map(e => e.dueDate));
+
     let count = 0;
     while (count < 100) {
-      if (account.recurrence === 'weekly') currentDate.setDate(currentDate.getDate() + 7);
-      else if (account.recurrence === 'monthly') currentDate.setMonth(currentDate.getMonth() + 1);
-      else if (account.recurrence === 'yearly') currentDate.setFullYear(currentDate.getFullYear() + 1);
+      count++;
+      let currentDate: Date;
+      if (account.recurrence === 'weekly') currentDate = addDays(baseDate, count * 7);
+      else if (account.recurrence === 'monthly') currentDate = addMonths(baseDate, count);
+      else if (account.recurrence === 'yearly') currentDate = addYears(baseDate, count);
       else break;
 
-      if (currentDate > endDate) {
-        console.log(`Current date ${currentDate.toISOString().split('T')[0]} exceeds end date ${endDateStr}. Stopping.`);
-        break;
-      }
+      if (currentDate > endDate) break;
 
-      const dueDateStr = currentDate.toISOString().split('T')[0];
-      console.log(`Adding entry for: ${dueDateStr}`);
+      const dueDateStr = format(currentDate, 'yyyy-MM-dd');
+
+      if (existingDates.has(dueDateStr)) continue;
+
       entriesToCreate.push({
         description: account.description,
         amount: account.amount,
@@ -728,17 +758,76 @@ export class DatabaseStorage implements IStorage {
         lateFees: account.lateFees,
         discount: account.discount,
         notes: account.notes,
+        attachmentUrl: account.attachmentUrl,
+        companyId: account.companyId,
         recurrence: "none",
         recurrenceEnd: null,
+        active: true,
       });
-      count++;
     }
 
     if (entriesToCreate.length > 0) {
-      console.log(`Inserting ${entriesToCreate.length} recurring entries`);
       await db.insert(accountsPayable).values(entriesToCreate);
-    } else {
-      console.log("No recurring entries were generated.");
+    }
+  }
+
+  private async handleReceivableRecurrence(account: AccountReceivable) {
+    const recEnd = (account.recurrencePeriod || "").trim();
+    if (!account.recurrence || account.recurrence === "none" || recEnd.length === 0) {
+      return;
+    }
+
+    const entriesToCreate: (typeof accountsReceivable.$inferInsert)[] = [];
+    const startDateStr = account.dueDate.split('T')[0];
+    const endDateStr = recEnd.split('T')[0];
+
+    const baseDate = parseISO(startDateStr);
+    const endDate = parseISO(endDateStr);
+
+    if (isNaN(baseDate.getTime()) || isNaN(endDate.getTime())) {
+      return;
+    }
+
+    const existingEntries = await db.select({ dueDate: accountsReceivable.dueDate })
+      .from(accountsReceivable)
+      .where(and(
+        eq(accountsReceivable.description, account.description),
+        account.companyId ? eq(accountsReceivable.companyId, account.companyId) : sql`${accountsReceivable.companyId} IS NULL`
+      ));
+    const existingDates = new Set(existingEntries.map(e => e.dueDate));
+
+    let count = 0;
+    while (count < 100) {
+      count++;
+      let currentDate: Date;
+      if (account.recurrence === 'weekly') currentDate = addDays(baseDate, count * 7);
+      else if (account.recurrence === 'monthly') currentDate = addMonths(baseDate, count);
+      else if (account.recurrence === 'yearly') currentDate = addYears(baseDate, count);
+      else break;
+
+      if (currentDate > endDate) break;
+
+      const dueDateStr = format(currentDate, 'yyyy-MM-dd');
+      if (existingDates.has(dueDateStr)) continue;
+
+      entriesToCreate.push({
+        description: account.description,
+        amount: account.amount,
+        dueDate: dueDateStr,
+        status: "pending",
+        clientId: account.clientId,
+        categoryId: account.categoryId,
+        notes: account.notes,
+        companyId: account.companyId,
+        recurrence: "none",
+        recurrencePeriod: null,
+        paymentMethod: account.paymentMethod,
+        active: true,
+      });
+    }
+
+    if (entriesToCreate.length > 0) {
+      await db.insert(accountsReceivable).values(entriesToCreate);
     }
   }
 
@@ -850,11 +939,21 @@ export class DatabaseStorage implements IStorage {
       ...account,
       status: account.status || "pending",
     }).returning();
+
+    if (newAccount.recurrence && newAccount.recurrence !== "none" && (newAccount.recurrencePeriod || "").length > 0) {
+      await this.handleReceivableRecurrence(newAccount);
+    }
+
     return newAccount;
   }
 
   async updateAccountReceivable(id: string, account: Partial<InsertAccountReceivable>): Promise<AccountReceivable | undefined> {
     const [updated] = await db.update(accountsReceivable).set(account).where(eq(accountsReceivable.id, id)).returning();
+
+    if (updated && account.recurrence && account.recurrence !== "none" && (account.recurrencePeriod || "").length > 0) {
+      await this.handleReceivableRecurrence(updated);
+    }
+
     return updated;
   }
 
@@ -869,6 +968,19 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db.update(accountsReceivable)
       .set(updateData)
       .where(eq(accountsReceivable.id, id))
+      .returning();
+    return updated;
+  }
+
+  async bulkMarkAccountsReceivableAsReceived(ids: string[], receivedDate: string, paymentMethod?: string): Promise<AccountReceivable[]> {
+    const updateData: any = { status: "received", receivedDate };
+    if (paymentMethod !== undefined) {
+      updateData.paymentMethod = paymentMethod || null;
+    }
+
+    const updated = await db.update(accountsReceivable)
+      .set(updateData)
+      .where(inArray(accountsReceivable.id, ids))
       .returning();
     return updated;
   }
@@ -2252,9 +2364,149 @@ export class DatabaseStorage implements IStorage {
     return !!deleted;
   }
 
+  // Card Transactions (PDR)
+  async getCardTransactions(companyId?: string, startDate?: string, endDate?: string): Promise<CardTransaction[]> {
+    const baseConditions = [eq(cardTransactions.active, true)];
+    if (companyId && companyId !== "all") {
+      baseConditions.push(eq(cardTransactions.companyId, companyId));
+    }
+    if (startDate && endDate) {
+      baseConditions.push(gte(cardTransactions.saleDate, startDate));
+      baseConditions.push(lte(cardTransactions.saleDate, endDate));
+    }
+    return await db.select().from(cardTransactions).where(and(...baseConditions)).orderBy(cardTransactions.saleDate);
+  }
+
+  async getCardTransaction(id: string): Promise<CardTransaction | undefined> {
+    const [transaction] = await db.select().from(cardTransactions).where(eq(cardTransactions.id, id));
+    return transaction;
+  }
+
+  async createCardTransaction(transaction: InsertCardTransaction): Promise<CardTransaction> {
+    const [newTransaction] = await db.insert(cardTransactions).values(transaction).returning();
+    return newTransaction;
+  }
+
+  async updateCardTransaction(id: string, transaction: Partial<InsertCardTransaction>): Promise<CardTransaction | undefined> {
+    const [updated] = await db.update(cardTransactions).set(transaction).where(eq(cardTransactions.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCardTransaction(id: string): Promise<boolean> {
+    const [deleted] = await db.update(cardTransactions).set({ active: false }).where(eq(cardTransactions.id, id)).returning();
+    return !!deleted;
+  }
+
+  // Bank Accounts
+  async getBankAccounts(companyId?: string): Promise<BankAccount[]> {
+    const conditions = [eq(bankAccounts.active, true)];
+    if (companyId && companyId !== "all") {
+      conditions.push(eq(bankAccounts.companyId, companyId));
+    }
+    return await db.select().from(bankAccounts).where(and(...conditions)).orderBy(bankAccounts.name);
+  }
+
+  async getBankAccount(id: string): Promise<BankAccount | undefined> {
+    const [account] = await db.select().from(bankAccounts).where(eq(bankAccounts.id, id));
+    return account;
+  }
+
+  async createBankAccount(account: InsertBankAccount): Promise<BankAccount> {
+    const [newAccount] = await db.insert(bankAccounts).values(account).returning();
+    return newAccount;
+  }
+
+  async updateBankAccount(id: string, accountData: Partial<InsertBankAccount>): Promise<BankAccount | undefined> {
+    const [updated] = await db.update(bankAccounts).set(accountData).where(eq(bankAccounts.id, id)).returning();
+    return updated;
+  }
+
+  async deleteBankAccount(id: string): Promise<boolean> {
+    const [deleted] = await db.update(bankAccounts).set({ active: false }).where(eq(bankAccounts.id, id)).returning();
+    return !!deleted;
+  }
+
+  // Payment Configs (Taxas)
+  async getPaymentConfigs(companyId?: string): Promise<PaymentConfig[]> {
+    const conditions = [eq(paymentConfigs.active, true)];
+    if (companyId && companyId !== "all") {
+      conditions.push(eq(paymentConfigs.companyId, companyId));
+    }
+    return await db.select().from(paymentConfigs).where(and(...conditions)).orderBy(paymentConfigs.name);
+  }
+
+  async getPaymentConfig(id: string): Promise<PaymentConfig | undefined> {
+    const [config] = await db.select().from(paymentConfigs).where(eq(paymentConfigs.id, id));
+    return config;
+  }
+
+  async createPaymentConfig(config: InsertPaymentConfig): Promise<PaymentConfig> {
+    const [newConfig] = await db.insert(paymentConfigs).values(config).returning();
+    return newConfig;
+  }
+
+  async updatePaymentConfig(id: string, configData: Partial<InsertPaymentConfig>): Promise<PaymentConfig | undefined> {
+    const [updated] = await db.update(paymentConfigs).set(configData).where(eq(paymentConfigs.id, id)).returning();
+    return updated;
+  }
+
+  async deletePaymentConfig(id: string): Promise<boolean> {
+    const [deleted] = await db.update(paymentConfigs).set({ active: false }).where(eq(paymentConfigs.id, id)).returning();
+    return !!deleted;
+  }
+
   // Inicialização do banco de dados
   async initializeDatabase(): Promise<void> {
     try {
+      // Create bank_accounts table if it doesn't exist
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS bank_accounts (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          name TEXT NOT NULL,
+          bank TEXT,
+          agency TEXT,
+          account TEXT,
+          type TEXT,
+          company_id VARCHAR REFERENCES companies(id),
+          active BOOLEAN DEFAULT true
+        );
+      `);
+
+      // Create payment_configs table if it doesn't exist
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS payment_configs (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          bank_account_id VARCHAR REFERENCES bank_accounts(id),
+          fee_debit DECIMAL(5, 2) DEFAULT 0,
+          fee_credit DECIMAL(5, 2) DEFAULT 0,
+          fee_pix DECIMAL(5, 2) DEFAULT 0,
+          company_id VARCHAR REFERENCES companies(id),
+          active BOOLEAN DEFAULT true
+        );
+      `);
+
+      // Create card_transactions table if it doesn't exist
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS card_transactions (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          sale_date TEXT NOT NULL,
+          payment_method TEXT NOT NULL,
+          gross_amount DECIMAL(15, 2) NOT NULL,
+          fee_percentage DECIMAL(5, 2) NOT NULL,
+          net_amount DECIMAL(15, 2) NOT NULL,
+          transaction_number TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          settlement_date TEXT,
+          notes TEXT,
+          company_id VARCHAR REFERENCES companies(id),
+          active BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+      console.log('✅ Tabela "card_transactions" verificado/criado');
+
       // Verificar e adicionar campo color na tabela categories se não existir
       await db.execute(sql`
         DO $$ 

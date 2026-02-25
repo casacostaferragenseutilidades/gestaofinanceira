@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { apiRequest } from "./queryClient";
 
 interface User {
@@ -25,11 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  async function checkAuth() {
+  const checkAuth = useCallback(async () => {
     try {
       const response = await fetch("/api/auth/me", { credentials: "include" });
       if (response.ok) {
@@ -40,24 +36,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, []);
 
-  async function login(username: string, password: string) {
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  const login = useCallback(async (username: string, password: string) => {
     const response = await apiRequest("POST", "/api/auth/login", { username, password });
     const data = await response.json();
     setUser(data.user);
-  }
+  }, []);
 
-  async function logout() {
+  const logout = useCallback(async () => {
     await apiRequest("POST", "/api/auth/logout");
+    sessionStorage.removeItem('dashboard_popup_shown');
     setUser(null);
-  }
+  }, []);
 
-  async function register(username: string, email: string, password: string, fullName: string) {
+  const register = useCallback(async (username: string, email: string, password: string, fullName: string) => {
     const response = await apiRequest("POST", "/api/auth/register", { username, email, password, fullName });
     const data = await response.json();
     setUser(data.user);
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        logout();
+      }, 10 * 60 * 1000); // 10 minutes (600,000 ms)
+    };
+
+    // Active events that reset the timer
+    const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart"];
+
+    const handleActivity = () => {
+      resetTimer();
+    };
+
+    events.forEach((event) => {
+      document.addEventListener(event, handleActivity);
+    });
+
+    // Initial timer start
+    resetTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      events.forEach((event) => {
+        document.removeEventListener(event, handleActivity);
+      });
+    };
+  }, [user, logout]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, login, logout, register }}>

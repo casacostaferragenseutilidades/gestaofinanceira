@@ -142,6 +142,27 @@ export const insertAccountReceivableSchema = createInsertSchema(accountsReceivab
 export type InsertAccountReceivable = z.infer<typeof insertAccountReceivableSchema>;
 export type AccountReceivable = typeof accountsReceivable.$inferSelect & { categoryName?: string; clientName?: string };
 
+// Card Transactions (Controle de Recebimentos PDR)
+export const cardTransactions = pgTable("card_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  saleDate: text("sale_date").notNull(),
+  paymentMethod: text("payment_method").notNull(), // 'credit_card', 'debit_card', 'pix'
+  grossAmount: decimal("gross_amount", { precision: 15, scale: 2 }).notNull(),
+  feePercentage: decimal("fee_percentage", { precision: 5, scale: 2 }).notNull(),
+  netAmount: decimal("net_amount", { precision: 15, scale: 2 }).notNull(),
+  transactionNumber: text("transaction_number"),
+  status: text("status").notNull().default("pending"), // 'pending' | 'received' | 'cancelled'
+  settlementDate: text("settlement_date"),
+  notes: text("notes"),
+  companyId: varchar("company_id").references(() => companies.id),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCardTransactionSchema = createInsertSchema(cardTransactions).omit({ id: true, createdAt: true });
+export type InsertCardTransaction = z.infer<typeof insertCardTransactionSchema>;
+export type CardTransaction = typeof cardTransactions.$inferSelect;
+
 // Mercado Pago Transactions
 export const mercadoPagoTransactions = pgTable("mercado_pago_transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -385,6 +406,39 @@ export const financialGoals = pgTable("financial_goals", {
 export const insertFinancialGoalSchema = createInsertSchema(financialGoals).omit({ id: true, createdAt: true });
 export type InsertFinancialGoal = z.infer<typeof insertFinancialGoalSchema>;
 export type FinancialGoal = typeof financialGoals.$inferSelect;
+
+// Bank Accounts (Contas Bancárias)
+export const bankAccounts = pgTable("bank_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  bank: text("bank"),
+  agency: text("agency"),
+  account: text("account"),
+  type: text("type"), // 'checking', 'savings', 'cash'
+  companyId: varchar("company_id").references(() => companies.id),
+  active: boolean("active").default(true),
+});
+
+export const insertBankAccountSchema = createInsertSchema(bankAccounts).omit({ id: true });
+export type InsertBankAccount = z.infer<typeof insertBankAccountSchema>;
+export type BankAccount = typeof bankAccounts.$inferSelect;
+
+// Payment Configs (Taxas e Máquinas)
+export const paymentConfigs = pgTable("payment_configs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // 'card_machine', 'pix_direct', 'gateway'
+  bankAccountId: varchar("bank_account_id").references(() => bankAccounts.id),
+  feeDebit: decimal("fee_debit", { precision: 5, scale: 2 }).default("0"),
+  feeCredit: decimal("fee_credit", { precision: 5, scale: 2 }).default("0"),
+  feePix: decimal("fee_pix", { precision: 5, scale: 2 }).default("0"),
+  companyId: varchar("company_id").references(() => companies.id),
+  active: boolean("active").default(true),
+});
+
+export const insertPaymentConfigSchema = createInsertSchema(paymentConfigs).omit({ id: true });
+export type InsertPaymentConfig = z.infer<typeof insertPaymentConfigSchema>;
+export type PaymentConfig = typeof paymentConfigs.$inferSelect;
 
 export interface FinancialGoalProgress extends FinancialGoal {
   currentAmount: number;
