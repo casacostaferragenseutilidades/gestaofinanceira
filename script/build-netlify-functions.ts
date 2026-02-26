@@ -130,10 +130,7 @@ app.use('/api/*', (req, res) => {
 });
 
 // Main handler
-export const handler = serverless(async (event, context) => {
-  // The serverless-http handler will process the event
-  return app;
-});
+export const handler = serverless(app);
 `;
 
 // Write the files
