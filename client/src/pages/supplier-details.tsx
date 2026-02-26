@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import {
@@ -45,7 +45,7 @@ export default function SupplierDetails() {
 
   const { data: payments, isLoading: paymentsLoading } = useQuery<AccountPayableWithSupplier[]>({
     queryKey: ["/api/accounts-payable"],
-    select: (data: AccountPayableWithSupplier[]) => 
+    select: (data: AccountPayableWithSupplier[]) =>
       data.filter(payment => payment.supplierId === supplierId),
     enabled: !!supplierId,
   });
@@ -278,7 +278,7 @@ export default function SupplierDetails() {
                     <TableCell>R$ {Number(payment.amount).toFixed(2)}</TableCell>
                     <TableCell>{new Date(payment.dueDate).toLocaleDateString('pt-BR')}</TableCell>
                     <TableCell>
-                      {payment.paymentDate 
+                      {payment.paymentDate
                         ? new Date(payment.paymentDate).toLocaleDateString('pt-BR')
                         : '-'
                       }
