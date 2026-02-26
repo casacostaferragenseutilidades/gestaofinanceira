@@ -14,7 +14,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (username: string, email: string, password: string, fullName: string) => Promise<void>;
 }
@@ -42,8 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, [checkAuth]);
 
-  const login = React.useCallback(async (username: string, password: string) => {
-    const response = await apiRequest("POST", "/api/auth/login", { username, password });
+  const login = React.useCallback(async (email: string, password: string) => {
+    const response = await apiRequest("POST", "/api/auth/login", { email, password });
     const data = await response.json();
     setUser(data.user);
   }, []);

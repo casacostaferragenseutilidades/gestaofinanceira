@@ -31,6 +31,7 @@ import type {
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getUsers(): Promise<User[]>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
@@ -348,12 +349,26 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    try {
+      const [user] = await db.select().from(users).where(eq(users.email, email));
+      return user;
+    } catch (err) {
+      console.error(`[Storage] Error in getUserByEmail(${email}):`, err);
+      throw err;
+    }
+  }
 
   async createUser(user: InsertUser): Promise<User> {
-    const [newUser] = await db.insert(users).values(user).returning();
-    return newUser;
+    try {
+      const [newUser] = await db.insert(users).values(user).returning();
+      return newUser;
+    } catch (err) {
+      console.error(`[Storage] Error in createUser:`, err);
+      throw err;
+    }
   }
+
 
   async getUsers(): Promise<User[]> {
     return db.select().from(users);

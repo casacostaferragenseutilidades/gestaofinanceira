@@ -46,7 +46,7 @@ export function registerRoutes(
   });
 
   app.post("/api/auth/login", (req, res, next) => {
-    console.log(`[Login API] Starting login for: ${req.body?.username}`);
+    console.log(`[Login API] Starting login for: ${req.body?.email}`);
     passport.authenticate("local", (err: any, user: any, info: any) => {
       try {
         if (err) {
@@ -54,9 +54,10 @@ export function registerRoutes(
           return res.status(500).json({ error: "Erro interno do servidor", details: err.message });
         }
         if (!user) {
-          console.warn("[Login API] Authentication failed for:", req.body?.username);
-          return res.status(401).json({ error: "Usuário ou senha inválidos" });
+          console.warn("[Login API] Authentication failed for:", req.body?.email);
+          return res.status(401).json({ error: "E-mail ou senha inválidos" });
         }
+
 
         console.log(`[Login API] Passport authenticated ${user.username}, calling req.logIn`);
         req.logIn(user, (err) => {

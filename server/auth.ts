@@ -92,24 +92,25 @@ export async function setupAuth(app: Express): Promise<void> {
   app.use(passport.session());
   console.log("[Auth] Passport and session initialized");
 
-  // Local Strategy for username/password authentication
+  // Local Strategy for email/password authentication
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
+    new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
       try {
-        console.log(`[Auth Strategy] Verifying user: ${username}`);
-        const user = await storage.getUserByUsername(username);
+        console.log(`[Auth Strategy] Verifying user: ${email}`);
+        const user = await storage.getUserByEmail(email);
         if (!user || !user.password) {
-          console.log(`[Auth Strategy] User not found or no password: ${username}`);
+          console.log(`[Auth Strategy] User not found or no password: ${email}`);
           return done(null, false);
         }
 
         const isValid = await comparePasswords(password, user.password);
         if (!isValid) {
-          console.log(`[Auth Strategy] Invalid password for: ${username}`);
+          console.log(`[Auth Strategy] Invalid password for: ${email}`);
           return done(null, false);
         }
 
-        console.log(`[Auth Strategy] Success for: ${username}`);
+        console.log(`[Auth Strategy] Success for: ${email}`);
+
         return done(null, {
           id: user.id,
           username: user.username,

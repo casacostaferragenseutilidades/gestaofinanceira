@@ -31,7 +31,7 @@ export default function Login() {
         await register(formData.username, formData.email, formData.password, formData.fullName);
         toast({ title: "Conta criada com sucesso!" });
       } else {
-        await login(formData.username, formData.password);
+        await login(formData.email, formData.password);
         toast({ title: "Login realizado com sucesso!" });
       }
       setLocation("/");
@@ -181,19 +181,37 @@ export default function Login() {
                       />
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <Label htmlFor="username" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground ml-1">
-                      Usuário
-                    </Label>
-                    <Input
-                      id="username"
-                      value={formData.username}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      placeholder="seu.usuario"
-                      className="h-12 bg-white/50 dark:bg-zinc-950/50"
-                      required
-                    />
-                  </div>
+                  {!isRegistering && (
+                    <div className="space-y-2">
+                      <Label htmlFor="email" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground ml-1">
+                        Email
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="seu.email@exemplo.com"
+                        className="h-12 bg-white/50 dark:bg-zinc-950/50"
+                        required
+                      />
+                    </div>
+                  )}
+                  {isRegistering && (
+                    <div className="space-y-2">
+                      <Label htmlFor="username" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground ml-1">
+                        Usuário
+                      </Label>
+                      <Input
+                        id="username"
+                        value={formData.username}
+                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                        placeholder="seu.usuario"
+                        className="h-12 bg-white/50 dark:bg-zinc-950/50"
+                        required
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="password" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground ml-1">
