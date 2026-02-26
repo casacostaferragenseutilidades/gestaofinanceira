@@ -4,7 +4,7 @@
   functions = "netlify/functions"
 
 [functions]
-  node_bundle = true
+  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"
