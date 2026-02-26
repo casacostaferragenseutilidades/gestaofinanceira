@@ -5,6 +5,7 @@
 
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = ["vite", "@vitejs/plugin-react", "esbuild", "lightningcss"]
 
 [[redirects]]
   from = "/api/*"
