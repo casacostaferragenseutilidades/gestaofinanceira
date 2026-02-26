@@ -2318,6 +2318,12 @@ export class DatabaseStorage implements IStorage {
         currentAmount = receivedReceivables.reduce((sum, r) => sum + parseFloat(r.amount), 0);
       } else if (goal.type === 'expense_total') {
         currentAmount = paidPayables.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      } else if (goal.type === 'mrr') {
+        // Simple MRR: sum of active monthly recurring receivables
+        currentAmount = allReceivables.filter(r => r.active && r.recurrence === 'monthly').reduce((sum, r) => sum + parseFloat(r.amount), 0);
+      } else if (goal.type === 'burn_rate') {
+        // Simple Burn Rate: total operational expenses for the month
+        currentAmount = paidPayables.reduce((sum, p) => sum + parseFloat(p.amount), 0);
       } else if (goal.type === 'category' && goal.categoryId) {
         // Find if category is income or expense
         const incomeSum = receivedReceivables.filter(r => r.categoryId === goal.categoryId).reduce((sum, r) => sum + parseFloat(r.amount), 0);

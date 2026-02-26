@@ -394,11 +394,12 @@ export const userSessions = pgTable("user_sessions", {
 export const financialGoals = pgTable("financial_goals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  type: text("type").notNull(), // 'income_total' | 'expense_total' | 'category'
+  type: text("type").notNull(), // 'income_total' | 'expense_total' | 'category' | 'mrr' | 'churn' | 'cac' | 'ltv' | 'burn_rate'
   targetAmount: decimal("target_amount", { precision: 15, scale: 2 }).notNull(),
   month: integer("month").notNull(), // 1-12
   year: integer("year").notNull(),
   categoryId: varchar("category_id").references(() => categories.id),
+  level: text("level").notNull().default("basic"), // 'basic' | 'intermediate' | 'advanced'
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
