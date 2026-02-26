@@ -1,5 +1,5 @@
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
 import {
     Target,
     Plus,
@@ -52,27 +52,17 @@ import { Badge } from "@/components/ui/badge";
 
 export default function FinancialGoals() {
     const { toast } = useToast();
-    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingGoal, setEditingGoal] = useState<FinancialGoal | null>(null);
+    const [selectedMonth, setSelectedMonth] = React.useState(new Date().getMonth() + 1);
+    const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
+    const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+    const [editingGoal, setEditingGoal] = React.useState<FinancialGoal | null>(null);
 
     const { data: progress, isLoading: loadingProgress } = useQuery<FinancialGoalProgress[]>({
-        queryKey: ["/api/financial-goals/progress", selectedMonth, selectedYear],
-        queryFn: async () => {
-            const response = await fetch(`/api/financial-goals/progress?month=${selectedMonth}&year=${selectedYear}`);
-            if (!response.ok) throw new Error('Erro ao buscar metas');
-            return response.json();
-        },
+        queryKey: ["/api/financial-goals/progress", { month: selectedMonth, year: selectedYear }],
     });
 
     const { data: categories } = useQuery<Category[]>({
         queryKey: ["/api/categories"],
-        queryFn: async () => {
-            const response = await fetch("/api/categories");
-            if (!response.ok) throw new Error('Erro ao buscar categorias');
-            return response.json();
-        },
     });
 
     const form = useForm({
@@ -171,7 +161,7 @@ export default function FinancialGoals() {
     ];
 
     const getProgressColor = (percentage: number, type: string, categoryId?: string | null) => {
-        const isExpense = type === 'expense_total' || (type === 'category' && categories?.find(c => c.id === categoryId)?.type === 'expense');
+        const isExpense = type === 'expense_total' || (type === 'category' && categories?.find((c: Category) => c.id === categoryId)?.type === 'expense');
         if (isExpense) {
             if (percentage > 100) return "bg-red-500";
             if (percentage > 80) return "bg-amber-500";
@@ -256,7 +246,7 @@ export default function FinancialGoals() {
                                                 <SelectValue placeholder="Selecione a categoria" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {categories?.map((cat) => (
+                                                {categories?.map((cat: Category) => (
                                                     <SelectItem key={cat.id} value={cat.id}>
                                                         {cat.name} ({cat.type === 'income' ? 'Receita' : 'Despesa'})
                                                     </SelectItem>
@@ -334,7 +324,7 @@ export default function FinancialGoals() {
                                     <CardDescription>
                                         {goal.type === 'income_total' ? 'Meta de Receita Total' :
                                             goal.type === 'expense_total' ? 'Limite de Despesa Total' :
-                                                `Categoria: ${categories?.find(c => c.id === goal.categoryId)?.name}`}
+                                                `Categoria: ${categories?.find((c: Category) => c.id === goal.categoryId)?.name}`}
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
@@ -437,7 +427,7 @@ export default function FinancialGoals() {
                             </div>
                             <div className="space-y-1">
                                 <p className="text-xs text-indigo-300 uppercase tracking-wider font-bold">Alcançadas</p>
-                                <p className="text-3xl font-bold">{progress?.filter(g => g.percentage >= 100 && (g.type === 'income_total' || (g.type === 'category' && categories?.find(c => c.id === g.categoryId)?.type === 'income'))).length || 0}</p>
+                                <p className="text-3xl font-bold">{progress?.filter((g: FinancialGoalProgress) => g.percentage >= 100 && (g.type === 'income_total' || (g.type === 'category' && categories?.find((c: Category) => c.id === g.categoryId)?.type === 'income'))).length || 0}</p>
                             </div>
                         </div>
 

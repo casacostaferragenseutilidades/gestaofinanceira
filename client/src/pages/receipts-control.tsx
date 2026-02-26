@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -73,7 +72,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { CardTransaction } from "@shared/schema";
+import type { CardTransaction, PaymentConfig } from "@shared/schema";
 import {
     BarChart,
     Bar,
@@ -104,12 +103,12 @@ const cardTransactionFormSchema = z.object({
 type CardTransactionFormData = z.infer<typeof cardTransactionFormSchema>;
 
 export default function ReceiptsControl() {
-    const [isOpen, setIsOpen] = useState(false);
-    const [editingTransaction, setEditingTransaction] = useState<CardTransaction | null>(null);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [methodFilter, setMethodFilter] = useState<string>("all");
-    const [dateRange, setDateRange] = useState({
+    const [isOpen, setIsOpen] = React.useState(false);
+    const [editingTransaction, setEditingTransaction] = React.useState<CardTransaction | null>(null);
+    const [searchTerm, setSearchTerm] = React.useState("");
+    const [statusFilter, setStatusFilter] = React.useState<string>("all");
+    const [methodFilter, setMethodFilter] = React.useState<string>("all");
+    const [dateRange, setDateRange] = React.useState({
         start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
         end: new Date().toISOString().split('T')[0]
     });
@@ -151,7 +150,7 @@ export default function ReceiptsControl() {
     const selectedConfigId = form.watch("paymentConfigId");
     const paymentMethod = form.watch("paymentMethod");
 
-    useEffect(() => {
+    React.useEffect(() => {
         if (selectedConfigId && configs) {
             const config = configs.find(c => c.id === selectedConfigId);
             if (config) {
@@ -165,7 +164,7 @@ export default function ReceiptsControl() {
         }
     }, [selectedConfigId, paymentMethod, configs]);
 
-    useEffect(() => {
+    React.useEffect(() => {
         const gross = parseFloat(grossAmount || "0");
         const fee = parseFloat(feePercentage || "0");
         const net = gross * (1 - fee / 100);

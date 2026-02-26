@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import * as React from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -162,60 +162,35 @@ function UpcomingPaymentsList({ items, type }: { items: (AccountPayable | Accoun
 }
 
 export default function Dashboard() {
-  const [startDate, setStartDate] = useState(() => {
+  const [startDate, setStartDate] = React.useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
   });
-  const [endDate, setEndDate] = useState(() => {
+  const [endDate, setEndDate] = React.useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
   });
-  const [period, setPeriod] = useState('current');
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [period, setPeriod] = React.useState('current');
+  const [isPopupOpen, setIsPopupOpen] = React.useState(false);
 
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats", { startDate, endDate }],
-    queryFn: async () => {
-      const response = await fetch(`/api/dashboard/stats?startDate=${startDate}&endDate=${endDate}`);
-      if (!response.ok) throw new Error('Erro ao buscar estatísticas');
-      return response.json();
-    },
   });
 
   const { data: cashFlow, isLoading: cashFlowLoading } = useQuery<CashFlowData[]>({
     queryKey: ["/api/dashboard/cash-flow", { startDate, endDate }],
-    queryFn: async () => {
-      const response = await fetch(`/api/dashboard/cash-flow?startDate=${startDate}&endDate=${endDate}`);
-      if (!response.ok) throw new Error('Erro ao buscar fluxo de caixa');
-      return response.json();
-    },
   });
 
   const { data: categoryExpenses, isLoading: expensesLoading } = useQuery<CategoryExpense[]>({
     queryKey: ["/api/dashboard/category-expenses", { startDate, endDate }],
-    queryFn: async () => {
-      const response = await fetch(`/api/dashboard/category-expenses?startDate=${startDate}&endDate=${endDate}`);
-      if (!response.ok) throw new Error('Erro ao buscar despesas por categoria');
-      return response.json();
-    },
   });
 
   const { data: upcomingPayables, isLoading: payablesLoading } = useQuery<AccountPayable[]>({
     queryKey: ["/api/accounts-payable/upcoming", { startDate, endDate }],
-    queryFn: async () => {
-      const response = await fetch(`/api/accounts-payable/upcoming?startDate=${startDate}&endDate=${endDate}`);
-      if (!response.ok) throw new Error('Erro ao buscar contas a pagar');
-      return response.json();
-    },
   });
 
   const { data: upcomingReceivables, isLoading: receivablesLoading } = useQuery<AccountReceivable[]>({
     queryKey: ["/api/accounts-receivable/upcoming", { startDate, endDate }],
-    queryFn: async () => {
-      const response = await fetch(`/api/accounts-receivable/upcoming?startDate=${startDate}&endDate=${endDate}`);
-      if (!response.ok) throw new Error('Erro ao buscar contas a receber');
-      return response.json();
-    },
   });
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -224,7 +199,7 @@ export default function Dashboard() {
   const pendingTodayReceivables = upcomingReceivables?.filter(r => r.dueDate <= todayStr) || [];
   const totalPendencies = pendingTodayPayables.length + pendingTodayReceivables.length;
 
-  useEffect(() => {
+  React.useEffect(() => {
     const popupShown = sessionStorage.getItem('dashboard_popup_shown');
     if (!popupShown && !payablesLoading && !receivablesLoading && totalPendencies > 0) {
       setIsPopupOpen(true);

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+import * as React from "react";
 import { apiRequest } from "./queryClient";
 
 interface User {
@@ -19,13 +19,13 @@ interface AuthContextType {
   register: (username: string, email: string, password: string, fullName: string) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = React.createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = React.useState<User | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const checkAuth = useCallback(async () => {
+  const checkAuth = React.useCallback(async () => {
     try {
       const response = await fetch("/api/auth/me", { credentials: "include" });
       if (response.ok) {
@@ -38,29 +38,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = React.useCallback(async (username: string, password: string) => {
     const response = await apiRequest("POST", "/api/auth/login", { username, password });
     const data = await response.json();
     setUser(data.user);
   }, []);
 
-  const logout = useCallback(async () => {
+  const logout = React.useCallback(async () => {
     await apiRequest("POST", "/api/auth/logout");
     sessionStorage.removeItem('dashboard_popup_shown');
     setUser(null);
   }, []);
 
-  const register = useCallback(async (username: string, email: string, password: string, fullName: string) => {
+  const register = React.useCallback(async (username: string, email: string, password: string, fullName: string) => {
     const response = await apiRequest("POST", "/api/auth/register", { username, email, password, fullName });
     const data = await response.json();
     setUser(data.user);
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (!user) return;
 
     let timeoutId: NodeJS.Timeout;
@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
+  const context = React.useContext(AuthContext);
   if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }

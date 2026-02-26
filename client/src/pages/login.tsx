@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,9 @@ export default function Login() {
   const [, setLocation] = useLocation();
   const { login, register, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
+  const [isRegistering, setIsRegistering] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [formData, setFormData] = React.useState({
     username: "",
     email: "",
     password: "",

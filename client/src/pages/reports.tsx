@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileText,
@@ -96,35 +96,34 @@ const months = [
 const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
 export default function Reports() {
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth.toString());
-  const [selectedYear, setSelectedYear] = useState(currentYear.toString());
-  const [generatingReport, setGeneratingReport] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = React.useState(currentMonth.toString());
+  const [selectedYear, setSelectedYear] = React.useState(currentYear.toString());
+  const [generatingReport, setGeneratingReport] = React.useState<string | null>(null);
   const { toast } = useToast();
 
   const handleGenerateReport = async (reportId: string, format: "pdf" | "excel") => {
     setGeneratingReport(`${reportId}-${format}`);
-    
+
     try {
       const response = await fetch(
         `/api/reports/${reportId}?format=${format}&month=${selectedMonth}&year=${selectedYear}`
       );
-      
+
       if (!response.ok) {
         throw new Error("Erro ao gerar relatório");
       }
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `relatorio-${reportId}-${selectedMonth}-${selectedYear}.${
-        format === "pdf" ? "pdf" : "xlsx"
-      }`;
+      a.download = `relatorio-${reportId}-${selectedMonth}-${selectedYear}.${format === "pdf" ? "pdf" : "xlsx"
+        }`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       toast({
         title: "Relatório gerado",
         description: "O download foi iniciado automaticamente.",
@@ -181,7 +180,7 @@ export default function Reports() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {reportTypes.map((report) => {
           const Icon = report.icon;
-          
+
           return (
             <Card key={report.id} className="flex flex-col">
               <CardHeader>

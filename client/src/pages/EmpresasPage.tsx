@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import * as React from 'react';
 import { Plus, Building2, Trash2, Edit, Users, DollarSign, TrendingUp, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,12 +24,12 @@ interface Empresa {
 }
 
 export default function EmpresasPage() {
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingEmpresa, setEditingEmpresa] = useState<Empresa | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [searchingCnpj, setSearchingCnpj] = useState(false);
-  const [formData, setFormData] = useState({
+  const [empresas, setEmpresas] = React.useState<Empresa[]>([]);
+  const [showForm, setShowForm] = React.useState(false);
+  const [editingEmpresa, setEditingEmpresa] = React.useState<Empresa | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [searchingCnpj, setSearchingCnpj] = React.useState(false);
+  const [formData, setFormData] = React.useState({
     nome: '',
     cnpj: '',
     razaoSocial: '',
@@ -39,7 +39,7 @@ export default function EmpresasPage() {
   });
   const { toast } = useToast();
 
-  useEffect(() => {
+  React.useEffect(() => {
     loadEmpresas();
   }, []);
 

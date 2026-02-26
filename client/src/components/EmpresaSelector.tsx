@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import * as React from 'react';
 import { Building2, ChevronDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useLocation } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
 
 interface Empresa {
   id: string;
@@ -24,12 +25,13 @@ interface EmpresaSelectorProps {
 }
 
 export function EmpresaSelector({ onNovaEmpresa }: EmpresaSelectorProps) {
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
-  const [empresaAtiva, setEmpresaAtiva] = useState<Empresa | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [empresas, setEmpresas] = React.useState<Empresa[]>([]);
+  const [empresaAtiva, setEmpresaAtiva] = React.useState<Empresa | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  useEffect(() => {
+  React.useEffect(() => {
     loadEmpresas();
     loadEmpresaAtiva();
   }, []);

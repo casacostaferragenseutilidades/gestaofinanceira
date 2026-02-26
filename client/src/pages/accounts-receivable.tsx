@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,6 +33,8 @@ import {
   List,
   BarChart3,
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +70,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+
 import {
   Form,
   FormControl,
@@ -139,20 +141,53 @@ type ClientFormData = z.infer<typeof clientFormSchema>;
 
 
 export default function AccountsReceivable() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingAccount, setEditingAccount] = useState<AccountReceivable | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [activeFilter, setActiveFilter] = useState<string>("active");
-  const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [accountToReceive, setAccountToReceive] = useState<AccountReceivable | null>(null);
-  const [receivedDate, setReceivedDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  const [paymentMethod, setPaymentMethod] = useState<string>("");
-  const [newClientDialogOpen, setNewClientDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
-  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [editingAccount, setEditingAccount] = React.useState<AccountReceivable | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<string>("all");
+  const [activeFilter, setActiveFilter] = React.useState<string>("active");
+  const [receivedDate, setReceivedDate] = React.useState<string>(new Date().toISOString().split("T")[0]);
+  const [showOnlyFilled, setShowOnlyFilled] = React.useState(false);
+  const [paymentMethod, setPaymentMethod] = React.useState<string>("");
+
+  const getDefaultDateRange = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    const formatDateStr = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    return {
+      start: formatDateStr(firstDay),
+      end: formatDateStr(lastDay)
+    };
+  };
+
+  const [dateFilter, setDateFilter] = React.useState<{ start: string; end: string }>(getDefaultDateRange);
+  const [newClientDialogOpen, setNewClientDialogOpen] = React.useState(false);
+  const [viewMode, setViewMode] = React.useState<"table" | "cards">("table");
+  const [selectedAccounts, setSelectedAccounts] = React.useState<string[]>([]);
+  const [empresaAtiva, setEmpresaAtiva] = React.useState<any>(null);
   const { toast } = useToast();
+
+  React.useEffect(() => {
+    const stored = localStorage.getItem('empresaAtiva');
+    if (stored) {
+      try {
+        setEmpresaAtiva(JSON.parse(stored));
+      } catch (e) {
+        console.error('Error parsing empresaAtiva', e);
+      }
+    }
+  }, []);
+
 
   const { data: accounts, isLoading } = useQuery<AccountReceivable[]>({
     queryKey: ["/api/accounts-receivable"],
@@ -496,7 +531,10 @@ export default function AccountsReceivable() {
     const matchesDateRange = (!dateFilter.start || account.dueDate >= dateFilter.start) &&
       (!dateFilter.end || account.dueDate <= dateFilter.end);
 
-    return matchesSearch && matchesStatus && matchesActive && matchesDateRange;
+    // Company filter
+    const matchesCompany = !empresaAtiva || account.companyId === empresaAtiva.id;
+
+    return matchesSearch && matchesStatus && matchesActive && matchesDateRange && matchesCompany;
   }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()) || [];
 
   const incomeCategories = categories?.filter((c) => c.type === "income");
@@ -504,11 +542,11 @@ export default function AccountsReceivable() {
   // Calculate statistics based on filtered accounts
   const stats = {
     total: filteredAccounts.reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
-    pending: filteredAccounts.filter(acc => acc.status === "pending").reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
+    pending: filteredAccounts.filter(acc => acc.status === "pending" && !isOverdue(acc.dueDate, acc.status)).reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
     received: filteredAccounts.filter(acc => acc.status === "received").reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
     overdue: filteredAccounts.filter(acc => isOverdue(acc.dueDate, acc.status)).reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
     overdueCount: filteredAccounts.filter(acc => isOverdue(acc.dueDate, acc.status)).length,
-    pendingCount: filteredAccounts.filter(acc => acc.status === "pending").length,
+    pendingCount: filteredAccounts.filter(acc => acc.status === "pending" && !isOverdue(acc.dueDate, acc.status)).length,
     receivedCount: filteredAccounts.filter(acc => acc.status === "received").length,
     totalDiscounts: filteredAccounts.reduce((sum, acc) => sum + (acc.discount && acc.discount !== null ? parseFloat(acc.discount) : 0), 0),
   };
@@ -1123,6 +1161,16 @@ export default function AccountsReceivable() {
                     <Grid3X3 className="h-4 w-4" />
                   </Button>
                 </div>
+                <div className="flex items-center gap-2 px-3 border-l ml-2">
+                  <Switch
+                    id="filled-mode"
+                    checked={showOnlyFilled}
+                    onCheckedChange={setShowOnlyFilled}
+                  />
+                  <Label htmlFor="filled-mode" className="text-xs cursor-pointer whitespace-nowrap">
+                    Apenas Preenchidos
+                  </Label>
+                </div>
                 {(searchTerm || statusFilter !== "all" || activeFilter !== "active" || dateFilter.start || dateFilter.end) && (
                   <Button
                     variant="ghost"
@@ -1417,23 +1465,36 @@ export default function AccountsReceivable() {
 
                           <div className="space-y-2 mb-3">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">Cliente:</span>
-                              <span className="text-sm font-medium">
-                                {client ? client.name : "-"}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">Categoria:</span>
-                              <span className="text-sm font-medium">
-                                {category ? category.name : "-"}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between">
                               <span className="text-sm text-muted-foreground">Vencimento:</span>
                               <span className="text-sm font-medium">{formatDate(account.dueDate)}</span>
                             </div>
+
+                            {(!showOnlyFilled || (client && client.name)) && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Cliente:</span>
+                                <span className="text-sm font-medium">
+                                  {client ? client.name : "-"}
+                                </span>
+                              </div>
+                            )}
+
+                            {(!showOnlyFilled || (category && category.name)) && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Categoria:</span>
+                                <span className="text-sm font-medium">
+                                  {category ? category.name : "-"}
+                                </span>
+                              </div>
+                            )}
+
+                            {(!showOnlyFilled || account.notes) && account.notes && (
+                              <div className="pt-2 border-t mt-2">
+                                <span className="text-xs text-muted-foreground block mb-1 font-semibold uppercase">Observações:</span>
+                                <p className="text-xs text-muted-foreground line-clamp-2 italic">
+                                  {account.notes}
+                                </p>
+                              </div>
+                            )}
                           </div>
 
                           <div className="border-t pt-3 space-y-2">
@@ -1445,7 +1506,7 @@ export default function AccountsReceivable() {
                             {discountNum > 0 && (
                               <div className="flex items-center justify-between">
                                 <span className="text-sm text-muted-foreground">Desconto:</span>
-                                <span className="font-medium text-red-600">-{formatCurrency(account.discount)}</span>
+                                <span className="font-medium text-red-600">-{formatCurrency(account.discount || "0")}</span>
                               </div>
                             )}
 
@@ -1536,7 +1597,7 @@ export default function AccountsReceivable() {
                 {accountToReceive && formatCurrency((parseFloat(accountToReceive.amount?.toString() || "0") - parseFloat(accountToReceive.discount?.toString() || "0")).toFixed(2))}
               </p>
             </div>
-            {accountToReceive && accountToReceive.paymentDate && (
+            {accountToReceive && accountToReceive.receivedDate && (
               <div>
                 <label className="text-sm font-medium">Forma de Pagamento</label>
                 <Badge variant="outline" className="font-normal capitalize">
@@ -1706,4 +1767,3 @@ export default function AccountsReceivable() {
   );
 }
 
-export default function AccountsReceivable();

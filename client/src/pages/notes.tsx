@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -58,9 +58,9 @@ const colors = [
 ];
 
 export default function NotesPage() {
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingNote, setEditingNote] = useState<Note | null>(null);
-    const [searchTerm, setSearchTerm] = useState("");
+    const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+    const [editingNote, setEditingNote] = React.useState<Note | null>(null);
+    const [searchTerm, setSearchTerm] = React.useState("");
     const { toast } = useToast();
 
     const { data: notes, isLoading } = useQuery<Note[]>({
@@ -256,7 +256,7 @@ export default function NotesPage() {
                                     <FormItem>
                                         <FormLabel>Conteúdo</FormLabel>
                                         <FormControl>
-                                            <Textarea {...field} placeholder="Escreva aqui..." rows={5} />
+                                            <Textarea {...field} value={field.value || ""} placeholder="Escreva aqui..." rows={5} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>

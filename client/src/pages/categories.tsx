@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -88,13 +88,13 @@ const dreCategories = [
   { value: "rental_revenue", label: "Receita de Aluguel", type: "income" },
   { value: "financial_revenue", label: "Receitas Financeiras", type: "income" },
   { value: "other_revenue", label: "Outras Receitas", type: "income" },
-  
+
   // Deduções
   { value: "deductions", label: "Deduções", type: "income" },
   { value: "tax_deductions", label: "Deduções de Impostos", type: "income" },
   { value: "returns", label: "Devoluções e Abatimentos", type: "income" },
   { value: "discounts_given", label: "Descontos Concedidos", type: "income" },
-  
+
   // Custos
   { value: "costs", label: "Custos", type: "expense" },
   { value: "raw_materials", label: "Matéria-Prima", type: "expense" },
@@ -102,10 +102,10 @@ const dreCategories = [
   { value: "packaging", label: "Embalagens", type: "expense" },
   { value: "freight_in", label: "Frete de Compras", type: "expense" },
   { value: "production_costs", label: "Custos de Produção", type: "expense" },
-  
+
   // Despesas Operacionais
   { value: "operational_expenses", label: "Despesas Operacionais", type: "expense" },
-  
+
   // Despesas Administrativas
   { value: "administrative_expenses", label: "Despesas Administrativas", type: "expense" },
   { value: "salaries", label: "Salários e Ordenados", type: "expense" },
@@ -116,7 +116,7 @@ const dreCategories = [
   { value: "bank_fees", label: "Taxas Bancárias", type: "expense" },
   { value: "accounting_services", label: "Serviços Contábeis", type: "expense" },
   { value: "legal_services", label: "Serviços Jurídicos", type: "expense" },
-  
+
   // Despesas Comerciais
   { value: "sales_expenses", label: "Despesas Comerciais", type: "expense" },
   { value: "marketing", label: "Marketing e Publicidade", type: "expense" },
@@ -125,14 +125,14 @@ const dreCategories = [
   { value: "travel_expenses", label: "Despesas de Viagem", type: "expense" },
   { value: "entertainment", label: "Representação e Entretenimento", type: "expense" },
   { value: "sales_material", label: "Material de Vendas", type: "expense" },
-  
+
   // Despesas com Imóveis
   { value: "property_expenses", label: "Despesas com Imóveis", type: "expense" },
   { value: "rent", label: "Aluguel", type: "expense" },
   { value: "property_tax", label: "IPTU e Taxas Prediais", type: "expense" },
   { value: "condominium", label: "Condomínio", type: "expense" },
   { value: "maintenance", label: "Manutenção e Conservação", type: "expense" },
-  
+
   // Despesas com Veículos
   { value: "vehicle_expenses", label: "Despesas com Veículos", type: "expense" },
   { value: "fuel", label: "Combustíveis", type: "expense" },
@@ -140,28 +140,28 @@ const dreCategories = [
   { value: "insurance", label: "Seguros", type: "expense" },
   { value: "vehicle_insurance", label: "Seguro Veicular", type: "expense" },
   { value: "licensing", label: "Licenciamento", type: "expense" },
-  
+
   // Despesas com Tecnologia
   { value: "technology_expenses", label: "Despesas com Tecnologia", type: "expense" },
   { value: "hardware", label: "Hardware e Equipamentos", type: "expense" },
   { value: "internet", label: "Internet e Telecomunicações", type: "expense" },
   { value: "hosting", label: "Hospedagem e Domínios", type: "expense" },
   { value: "it_services", label: "Serviços de TI", type: "expense" },
-  
+
   // Despesas Financeiras
   { value: "financial_expenses", label: "Despesas Financeiras", type: "expense" },
   { value: "interest_expenses", label: "Despesas de Juros", type: "expense" },
   { value: "late_fees", label: "Multa e Juros de Atraso", type: "expense" },
   { value: "exchange_loss", label: "Variação Cambial", type: "expense" },
   { value: "bad_debt", label: "Perdas com Créditos", type: "expense" },
-  
+
   // Impostos e Tributos
   { value: "taxes", label: "Impostos e Tributos", type: "expense" },
   { value: "federal_taxes", label: "Impostos Federais", type: "expense" },
   { value: "state_taxes", label: "Impostos Estaduais", type: "expense" },
   { value: "municipal_taxes", label: "Impostos Municipais", type: "expense" },
   { value: "tax_fines", label: "Multas Fiscais", type: "expense" },
-  
+
   // Despesas Diversas
   { value: "miscellaneous", label: "Despesas Diversas", type: "expense" },
   { value: "utilities", label: "Água, Luz e Telefone", type: "expense" },
@@ -174,11 +174,11 @@ const dreCategories = [
 ];
 
 export default function Categories() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [editingCategory, setEditingCategory] = React.useState<Category | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [typeFilter, setTypeFilter] = React.useState<string>("all");
+  const [viewMode, setViewMode] = React.useState<"grid" | "list">("grid");
   const { toast } = useToast();
 
   const { data: categories, isLoading } = useQuery<Category[]>({
@@ -276,7 +276,7 @@ export default function Categories() {
     setEditingCategory(category);
     form.reset({
       name: category.name,
-      type: category.type,
+      type: category.type as "income" | "expense",
       dreCategory: category.dreCategory || "",
       color: category.color || "",
     });
@@ -471,8 +471,8 @@ export default function Categories() {
                     {createMutation.isPending || updateMutation.isPending
                       ? "Salvando..."
                       : editingCategory
-                      ? "Atualizar"
-                      : "Cadastrar"}
+                        ? "Atualizar"
+                        : "Cadastrar"}
                   </Button>
                 </DialogFooter>
               </form>

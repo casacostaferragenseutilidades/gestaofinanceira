@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp,
@@ -48,7 +48,7 @@ interface AccountPayable {
   description: string;
   amount: string;
   dueDate: string;
-  paidDate: string | null;
+  paymentDate: string | null;
   status: 'pending' | 'paid' | 'overdue';
   supplierId: string;
   categoryId: string;
@@ -73,15 +73,40 @@ interface AccountReceivable {
 
 export default function CashFlow() {
   const queryClient = useQueryClient();
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("all");
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // Janeiro = 0, Fevereiro = 1, etc.
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(() => {
+    const stored = localStorage.getItem('empresaAtiva');
+    if (stored) {
+      try {
+        const empresa = JSON.parse(stored);
+        return empresa.id || "all";
+      } catch (e) {
+        return "all";
+      }
+    }
+    return "all";
+  });
+  const [selectedMonth, setSelectedMonth] = React.useState(new Date().getMonth()); // Janeiro = 0, Fevereiro = 1, etc.
+  const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
 
   // Calcular datas baseadas no mês e ano selecionados (corrigido para evitar problemas de fuso horário)
   const startDate = new Date(Date.UTC(selectedYear, selectedMonth, 1)).toISOString().split("T")[0];
   const endDate = new Date(Date.UTC(selectedYear, selectedMonth + 1, 0)).toISOString().split("T")[0];
 
   // Carregar empresa ativa do localStorage
+  React.useEffect(() => {
+    const handleStorageChange = () => {
+      const stored = localStorage.getItem('empresaAtiva');
+      if (stored) {
+        try {
+          const empresa = JSON.parse(stored);
+          setSelectedCompanyId(empresa.id || "all");
+        } catch (e) { }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
 
   // Buscar empresas
@@ -238,9 +263,8 @@ export default function CashFlow() {
                     variant={selectedYear === year ? "default" : "outline"}
                     size="sm"
                     onClick={() => setSelectedYear(year)}
-                    className={`h-9 text-xs font-medium ${
-                      selectedYear === year ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                    }`}
+                    className={`h-9 text-xs font-medium ${selectedYear === year ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                      }`}
                   >
                     {year}
                   </Button>
@@ -264,9 +288,8 @@ export default function CashFlow() {
                       size="sm"
                       onClick={() => setSelectedMonth(i)}
                       title={date.toLocaleString('pt-BR', { month: 'long' })}
-                      className={`h-7 text-xs font-medium ${
-                        isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                      }`}
+                      className={`h-7 text-xs font-medium ${isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                        }`}
                     >
                       {monthCode}
                     </Button>
@@ -537,7 +560,7 @@ export default function CashFlow() {
                     {allTransactions.map((transaction, index) => {
                       const empresa = empresas?.find(e => e.id === transaction.companyId);
                       return (
-                        <TableRow 
+                        <TableRow
                           key={`${transaction.type}-${transaction.id}`}
                           className={`hover:bg-muted/50 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
                         >
@@ -652,7 +675,7 @@ export default function CashFlow() {
                   </TableHeader>
                   <TableBody>
                     {accountsReceivable.map((account, index) => (
-                      <TableRow 
+                      <TableRow
                         key={account.id}
                         className={`hover:bg-green-50/20 dark:hover:bg-green-950/20 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
                       >
@@ -747,7 +770,7 @@ export default function CashFlow() {
                   </TableHeader>
                   <TableBody>
                     {accountsPayable.map((account, index) => (
-                      <TableRow 
+                      <TableRow
                         key={account.id}
                         className={`hover:bg-red-50/20 dark:hover:bg-red-950/20 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
                       >

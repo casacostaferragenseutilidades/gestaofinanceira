@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileText,
@@ -74,14 +74,14 @@ function DRERow({
   item: DRELineItem;
   comparison?: number;
 }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = React.useState(true);
   const hasChildren = item.items && item.items.length > 0;
 
   const bgClass = item.isTotal
     ? "bg-gradient-to-r from-slate-50 to-slate-100 border-l-4 border-slate-400"
     : item.isSubtotal
-    ? "bg-gradient-to-r from-slate-25 to-slate-50 border-l-4 border-slate-300"
-    : "hover:bg-slate-50 transition-colors duration-200";
+      ? "bg-gradient-to-r from-slate-25 to-slate-50 border-l-4 border-slate-300"
+      : "hover:bg-slate-50 transition-colors duration-200";
 
   const paddingClass = item.indent ? `pl-${(item.indent + 1) * 4}` : "pl-4";
 
@@ -126,9 +126,8 @@ function DRERow({
         </div>
         <div className="flex items-center gap-8">
           <span
-            className={`text-right min-w-[140px] font-semibold ${
-              item.value < 0 ? "text-red-600" : item.value > 0 ? "text-slate-900" : "text-slate-600"
-            }`}
+            className={`text-right min-w-[140px] font-semibold ${item.value < 0 ? "text-red-600" : item.value > 0 ? "text-slate-900" : "text-slate-600"
+              }`}
           >
             {formatCurrency(Math.abs(item.value))}
             {item.value < 0 && " (-)"}
@@ -140,9 +139,8 @@ function DRERow({
           )}
           {comparison !== undefined && (
             <span
-              className={`text-right min-w-[100px] flex items-center gap-1 font-medium ${
-                comparison >= 0 ? "text-emerald-600" : "text-red-600"
-              }`}
+              className={`text-right min-w-[100px] flex items-center gap-1 font-medium ${comparison >= 0 ? "text-emerald-600" : "text-red-600"
+                }`}
             >
               {comparison >= 0 ? (
                 <TrendingUp className="h-3 w-3" />
@@ -170,17 +168,17 @@ export default function DRE() {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
 
-  const [selectedPeriod, setSelectedPeriod] = useState({
+  const [selectedPeriod, setSelectedPeriod] = React.useState({
     year: currentYear,
     month: currentMonth,
   });
-  const [comparisonPeriod, setComparisonPeriod] = useState({
+  const [comparisonPeriod, setComparisonPeriod] = React.useState({
     year: currentYear,
     month: currentMonth - 1 || 12,
   });
 
   const { data: dreData, isLoading } = useQuery<DREComparison>({
-    queryKey: ["/api/dre", selectedPeriod.year, selectedPeriod.month],
+    queryKey: ["/api/dre", { year: selectedPeriod.year, month: selectedPeriod.month }],
   });
 
   const months = [
@@ -202,224 +200,224 @@ export default function DRE() {
 
   const dreItems: DRELineItem[] = dreData
     ? [
-        {
-          label: "RECEITA BRUTA",
-          value: dreData.current.grossRevenue,
-          percentage: 100,
-          isTotal: true,
-          icon: <DollarSign className="h-4 w-4 text-blue-600" />,
-          fiscalCode: "Receita Operacional Bruta",
-        },
-        {
-          label: "(-) Deduções da Receita",
-          value: -dreData.current.deductions,
-          percentage: dreData.current.grossRevenue > 0
-            ? (dreData.current.deductions / dreData.current.grossRevenue) * 100
-            : 0,
-          indent: 1,
-          items: [
-            {
-              label: "PIS",
-              value: -dreData.current.pis,
-              percentage: dreData.current.grossRevenue > 0
-                ? (dreData.current.pis / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              fiscalCode: "PIS - Programa de Integração Social",
-            },
-            {
-              label: "COFINS",
-              value: -dreData.current.cofins,
-              percentage: dreData.current.grossRevenue > 0
-                ? (dreData.current.cofins / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              fiscalCode: "COFINS - Contribuição para Financiamento da Seguridade Social",
-            },
-            {
-              label: "ICMS",
-              value: -dreData.current.icms,
-              percentage: dreData.current.grossRevenue > 0
-                ? (dreData.current.icms / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              fiscalCode: "ICMS - Imposto sobre Circulação de Mercadorias e Serviços",
-            },
-            {
-              label: "ISS",
-              value: -dreData.current.iss,
-              percentage: dreData.current.grossRevenue > 0
-                ? (dreData.current.iss / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              fiscalCode: "ISS - Imposto Sobre Serviços",
-            },
-            {
-              label: "Outras Deduções",
-              value: -(dreData.current.deductions - dreData.current.pis - dreData.current.cofins - dreData.current.icms - dreData.current.iss),
-              percentage: dreData.current.grossRevenue > 0
-                ? ((dreData.current.deductions - dreData.current.pis - dreData.current.cofins - dreData.current.icms - dreData.current.iss) / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              fiscalCode: "Deduções diversas",
-            },
-          ],
-        },
-        {
-          label: "RECEITA LÍQUIDA",
-          value: dreData.current.netRevenue,
-          percentage: dreData.current.grossRevenue > 0
-            ? (dreData.current.netRevenue / dreData.current.grossRevenue) * 100
-            : 0,
-          isSubtotal: true,
-          icon: <Receipt className="h-4 w-4 text-emerald-600" />,
-          fiscalCode: "Receita Operacional Líquida",
-        },
-        {
-          label: "(-) Custo dos Produtos Vendidos (CPV)",
-          value: -dreData.current.costs,
-          percentage: dreData.current.grossRevenue > 0
-            ? (dreData.current.costs / dreData.current.grossRevenue) * 100
-            : 0,
-          indent: 1,
-          icon: <Package className="h-4 w-4 text-orange-600" />,
-          description: "Matéria-prima, mão de obra direta, custos de fabricação",
-          fiscalCode: "Custo dos Produtos Vendidos",
-        },
-        {
-          label: "LUCRO BRUTO",
-          value: dreData.current.grossProfit,
-          percentage: dreData.current.grossRevenue > 0
-            ? (dreData.current.grossProfit / dreData.current.grossRevenue) * 100
-            : 0,
-          isSubtotal: true,
-          icon: <TrendingUp className="h-4 w-4 text-green-600" />,
-          fiscalCode: "Lucro Bruto Operacional",
-        },
-        {
-          label: "(-) Despesas Operacionais",
-          value: -dreData.current.operationalExpenses,
-          percentage: dreData.current.grossRevenue > 0
-            ? (dreData.current.operationalExpenses / dreData.current.grossRevenue) * 100
-            : 0,
-          indent: 1,
-          items: [
-            {
-              label: "Despesas Administrativas",
-              value: -(dreData.current.operationalExpenses * 0.4),
-              percentage: dreData.current.grossRevenue > 0
-                ? ((dreData.current.operationalExpenses * 0.4) / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              icon: <Building className="h-4 w-4 text-slate-600" />,
-              description: "Salários administrativos, aluguel, contabilidade",
-            },
-            {
-              label: "Despesas de Vendas",
-              value: -(dreData.current.operationalExpenses * 0.3),
-              percentage: dreData.current.grossRevenue > 0
-                ? ((dreData.current.operationalExpenses * 0.3) / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              icon: <Users className="h-4 w-4 text-blue-600" />,
-              description: "Comissões, marketing, propaganda",
-            },
-            {
-              label: "Despesas Financeiras",
-              value: -(dreData.current.operationalExpenses * 0.2),
-              percentage: dreData.current.grossRevenue > 0
-                ? ((dreData.current.operationalExpenses * 0.2) / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              icon: <Percent className="h-4 w-4 text-purple-600" />,
-              description: "Juros, multas, variações cambiais",
-            },
-            {
-              label: "Outras Despesas Operacionais",
-              value: -(dreData.current.operationalExpenses * 0.1),
-              percentage: dreData.current.grossRevenue > 0
-                ? ((dreData.current.operationalExpenses * 0.1) / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              icon: <Zap className="h-4 w-4 text-amber-600" />,
-              description: "Serviços terceiros, materiais, outros",
-            },
-          ],
-        },
-        {
-          label: "LUCRO OPERACIONAL (EBIT)",
-          value: dreData.current.operationalProfit,
-          percentage: dreData.current.grossRevenue > 0
-            ? (dreData.current.operationalProfit / dreData.current.grossRevenue) * 100
-            : 0,
-          isSubtotal: true,
-          icon: <Calculator className="h-4 w-4 text-indigo-600" />,
-          fiscalCode: "Earnings Before Interest and Taxes",
-        },
-        {
-          label: "EBITDA",
-          value: dreData.current.ebitda,
-          percentage: dreData.current.grossRevenue > 0
-            ? (dreData.current.ebitda / dreData.current.grossRevenue) * 100
-            : 0,
-          isSubtotal: true,
-          icon: <Target className="h-4 w-4 text-purple-600" />,
-          description: "Lucro antes de juros, impostos, depreciação e amortização",
-          fiscalCode: "Earnings Before Interest, Taxes, Depreciation and Amortization",
-        },
-        {
-          label: "(-) Despesas Não Operacionais",
-          value: -(dreData.current.irpj + dreData.current.csll + dreData.current.otherTaxes),
-          percentage: dreData.current.grossRevenue > 0
-            ? ((dreData.current.irpj + dreData.current.csll + dreData.current.otherTaxes) / dreData.current.grossRevenue) * 100
-            : 0,
-          indent: 1,
-          items: [
-            {
-              label: "IRPJ",
-              value: -dreData.current.irpj,
-              percentage: dreData.current.grossRevenue > 0
-                ? (dreData.current.irpj / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              icon: <Shield className="h-4 w-4 text-red-600" />,
-              description: "Imposto de Renda Pessoa Jurídica",
-              fiscalCode: "Imposto de Renda - Lucro Real",
-            },
-            {
-              label: "CSLL",
-              value: -dreData.current.csll,
-              percentage: dreData.current.grossRevenue > 0
-                ? (dreData.current.csll / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              icon: <Shield className="h-4 w-4 text-orange-600" />,
-              description: "Contribuição Social sobre Lucro Líquido",
-              fiscalCode: "Contribuição Social - 9% ou 20%",
-            },
-            {
-              label: "Outros Tributos",
-              value: -dreData.current.otherTaxes,
-              percentage: dreData.current.grossRevenue > 0
-                ? (dreData.current.otherTaxes / dreData.current.grossRevenue) * 100
-                : 0,
-              indent: 2,
-              icon: <Receipt className="h-4 w-4 text-slate-600" />,
-              description: "Outros tributos e contribuições",
-            },
-          ],
-        },
-        {
-          label: "LUCRO LÍQUIDO",
-          value: dreData.current.netProfit,
-          percentage: dreData.current.grossRevenue > 0
-            ? (dreData.current.netProfit / dreData.current.grossRevenue) * 100
-            : 0,
-          isTotal: true,
-          icon: <PiggyBank className="h-4 w-4 text-emerald-700" />,
-          fiscalCode: "Lucro Líquido do Exercício",
-        },
-      ]
+      {
+        label: "RECEITA BRUTA",
+        value: dreData.current.grossRevenue,
+        percentage: 100,
+        isTotal: true,
+        icon: <DollarSign className="h-4 w-4 text-blue-600" />,
+        fiscalCode: "Receita Operacional Bruta",
+      },
+      {
+        label: "(-) Deduções da Receita",
+        value: -dreData.current.deductions,
+        percentage: dreData.current.grossRevenue > 0
+          ? (dreData.current.deductions / dreData.current.grossRevenue) * 100
+          : 0,
+        indent: 1,
+        items: [
+          {
+            label: "PIS",
+            value: -dreData.current.pis,
+            percentage: dreData.current.grossRevenue > 0
+              ? (dreData.current.pis / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            fiscalCode: "PIS - Programa de Integração Social",
+          },
+          {
+            label: "COFINS",
+            value: -dreData.current.cofins,
+            percentage: dreData.current.grossRevenue > 0
+              ? (dreData.current.cofins / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            fiscalCode: "COFINS - Contribuição para Financiamento da Seguridade Social",
+          },
+          {
+            label: "ICMS",
+            value: -dreData.current.icms,
+            percentage: dreData.current.grossRevenue > 0
+              ? (dreData.current.icms / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            fiscalCode: "ICMS - Imposto sobre Circulação de Mercadorias e Serviços",
+          },
+          {
+            label: "ISS",
+            value: -dreData.current.iss,
+            percentage: dreData.current.grossRevenue > 0
+              ? (dreData.current.iss / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            fiscalCode: "ISS - Imposto Sobre Serviços",
+          },
+          {
+            label: "Outras Deduções",
+            value: -(dreData.current.deductions - dreData.current.pis - dreData.current.cofins - dreData.current.icms - dreData.current.iss),
+            percentage: dreData.current.grossRevenue > 0
+              ? ((dreData.current.deductions - dreData.current.pis - dreData.current.cofins - dreData.current.icms - dreData.current.iss) / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            fiscalCode: "Deduções diversas",
+          },
+        ],
+      },
+      {
+        label: "RECEITA LÍQUIDA",
+        value: dreData.current.netRevenue,
+        percentage: dreData.current.grossRevenue > 0
+          ? (dreData.current.netRevenue / dreData.current.grossRevenue) * 100
+          : 0,
+        isSubtotal: true,
+        icon: <Receipt className="h-4 w-4 text-emerald-600" />,
+        fiscalCode: "Receita Operacional Líquida",
+      },
+      {
+        label: "(-) Custo dos Produtos Vendidos (CPV)",
+        value: -dreData.current.costs,
+        percentage: dreData.current.grossRevenue > 0
+          ? (dreData.current.costs / dreData.current.grossRevenue) * 100
+          : 0,
+        indent: 1,
+        icon: <Package className="h-4 w-4 text-orange-600" />,
+        description: "Matéria-prima, mão de obra direta, custos de fabricação",
+        fiscalCode: "Custo dos Produtos Vendidos",
+      },
+      {
+        label: "LUCRO BRUTO",
+        value: dreData.current.grossProfit,
+        percentage: dreData.current.grossRevenue > 0
+          ? (dreData.current.grossProfit / dreData.current.grossRevenue) * 100
+          : 0,
+        isSubtotal: true,
+        icon: <TrendingUp className="h-4 w-4 text-green-600" />,
+        fiscalCode: "Lucro Bruto Operacional",
+      },
+      {
+        label: "(-) Despesas Operacionais",
+        value: -dreData.current.operationalExpenses,
+        percentage: dreData.current.grossRevenue > 0
+          ? (dreData.current.operationalExpenses / dreData.current.grossRevenue) * 100
+          : 0,
+        indent: 1,
+        items: [
+          {
+            label: "Despesas Administrativas",
+            value: -(dreData.current.operationalExpenses * 0.4),
+            percentage: dreData.current.grossRevenue > 0
+              ? ((dreData.current.operationalExpenses * 0.4) / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            icon: <Building className="h-4 w-4 text-slate-600" />,
+            description: "Salários administrativos, aluguel, contabilidade",
+          },
+          {
+            label: "Despesas de Vendas",
+            value: -(dreData.current.operationalExpenses * 0.3),
+            percentage: dreData.current.grossRevenue > 0
+              ? ((dreData.current.operationalExpenses * 0.3) / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            icon: <Users className="h-4 w-4 text-blue-600" />,
+            description: "Comissões, marketing, propaganda",
+          },
+          {
+            label: "Despesas Financeiras",
+            value: -(dreData.current.operationalExpenses * 0.2),
+            percentage: dreData.current.grossRevenue > 0
+              ? ((dreData.current.operationalExpenses * 0.2) / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            icon: <Percent className="h-4 w-4 text-purple-600" />,
+            description: "Juros, multas, variações cambiais",
+          },
+          {
+            label: "Outras Despesas Operacionais",
+            value: -(dreData.current.operationalExpenses * 0.1),
+            percentage: dreData.current.grossRevenue > 0
+              ? ((dreData.current.operationalExpenses * 0.1) / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            icon: <Zap className="h-4 w-4 text-amber-600" />,
+            description: "Serviços terceiros, materiais, outros",
+          },
+        ],
+      },
+      {
+        label: "LUCRO OPERACIONAL (EBIT)",
+        value: dreData.current.operationalProfit,
+        percentage: dreData.current.grossRevenue > 0
+          ? (dreData.current.operationalProfit / dreData.current.grossRevenue) * 100
+          : 0,
+        isSubtotal: true,
+        icon: <Calculator className="h-4 w-4 text-indigo-600" />,
+        fiscalCode: "Earnings Before Interest and Taxes",
+      },
+      {
+        label: "EBITDA",
+        value: dreData.current.ebitda,
+        percentage: dreData.current.grossRevenue > 0
+          ? (dreData.current.ebitda / dreData.current.grossRevenue) * 100
+          : 0,
+        isSubtotal: true,
+        icon: <Target className="h-4 w-4 text-purple-600" />,
+        description: "Lucro antes de juros, impostos, depreciação e amortização",
+        fiscalCode: "Earnings Before Interest, Taxes, Depreciation and Amortization",
+      },
+      {
+        label: "(-) Despesas Não Operacionais",
+        value: -(dreData.current.irpj + dreData.current.csll + dreData.current.otherTaxes),
+        percentage: dreData.current.grossRevenue > 0
+          ? ((dreData.current.irpj + dreData.current.csll + dreData.current.otherTaxes) / dreData.current.grossRevenue) * 100
+          : 0,
+        indent: 1,
+        items: [
+          {
+            label: "IRPJ",
+            value: -dreData.current.irpj,
+            percentage: dreData.current.grossRevenue > 0
+              ? (dreData.current.irpj / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            icon: <Shield className="h-4 w-4 text-red-600" />,
+            description: "Imposto de Renda Pessoa Jurídica",
+            fiscalCode: "Imposto de Renda - Lucro Real",
+          },
+          {
+            label: "CSLL",
+            value: -dreData.current.csll,
+            percentage: dreData.current.grossRevenue > 0
+              ? (dreData.current.csll / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            icon: <Shield className="h-4 w-4 text-orange-600" />,
+            description: "Contribuição Social sobre Lucro Líquido",
+            fiscalCode: "Contribuição Social - 9% ou 20%",
+          },
+          {
+            label: "Outros Tributos",
+            value: -dreData.current.otherTaxes,
+            percentage: dreData.current.grossRevenue > 0
+              ? (dreData.current.otherTaxes / dreData.current.grossRevenue) * 100
+              : 0,
+            indent: 2,
+            icon: <Receipt className="h-4 w-4 text-slate-600" />,
+            description: "Outros tributos e contribuições",
+          },
+        ],
+      },
+      {
+        label: "LUCRO LÍQUIDO",
+        value: dreData.current.netProfit,
+        percentage: dreData.current.grossRevenue > 0
+          ? (dreData.current.netProfit / dreData.current.grossRevenue) * 100
+          : 0,
+        isTotal: true,
+        icon: <PiggyBank className="h-4 w-4 text-emerald-700" />,
+        fiscalCode: "Lucro Líquido do Exercício",
+      },
+    ]
     : [];
 
   return (
@@ -508,11 +506,10 @@ export default function DRE() {
                       <TrendingDown className="h-3 w-3 text-red-600" />
                     )}
                     <span
-                      className={`font-medium ${
-                        dreData.percentageChange.grossRevenue >= 0
-                          ? "text-emerald-600"
-                          : "text-red-600"
-                      }`}
+                      className={`font-medium ${dreData.percentageChange.grossRevenue >= 0
+                        ? "text-emerald-600"
+                        : "text-red-600"
+                        }`}
                     >
                       {dreData.percentageChange.grossRevenue >= 0 ? "+" : ""}
                       {dreData.percentageChange.grossRevenue.toFixed(1)}%
@@ -539,9 +536,9 @@ export default function DRE() {
                   Margem: {" "}
                   {dreData?.current.grossRevenue
                     ? (
-                        (dreData.current.grossProfit / dreData.current.grossRevenue) *
-                        100
-                      ).toFixed(1)
+                      (dreData.current.grossProfit / dreData.current.grossRevenue) *
+                      100
+                    ).toFixed(1)
                     : 0}
                   %
                 </p>
@@ -563,40 +560,37 @@ export default function DRE() {
                 <p className="text-xs text-slate-600 mt-2 font-medium">
                   {dreData?.current.grossRevenue
                     ? (
-                        (dreData.current.ebitda / dreData.current.grossRevenue) *
-                        100
-                      ).toFixed(1)
+                      (dreData.current.ebitda / dreData.current.grossRevenue) *
+                      100
+                    ).toFixed(1)
                     : 0}
                   % da receita
                 </p>
               </CardContent>
             </Card>
             <Card
-              className={`bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 ${
-                (dreData?.current.netProfit || 0) >= 0
-                  ? "bg-gradient-to-br from-emerald-50 to-emerald-100"
-                  : "bg-gradient-to-br from-red-50 to-red-100"
-              }`}
+              className={`bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 ${(dreData?.current.netProfit || 0) >= 0
+                ? "bg-gradient-to-br from-emerald-50 to-emerald-100"
+                : "bg-gradient-to-br from-red-50 to-red-100"
+                }`}
             >
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-700">
                   Lucro Líquido
                 </CardTitle>
-                <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${
-                  (dreData?.current.netProfit || 0) >= 0
-                    ? "bg-gradient-to-br from-emerald-500 to-emerald-600"
-                    : "bg-gradient-to-br from-red-500 to-red-600"
-                }`}>
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${(dreData?.current.netProfit || 0) >= 0
+                  ? "bg-gradient-to-br from-emerald-500 to-emerald-600"
+                  : "bg-gradient-to-br from-red-500 to-red-600"
+                  }`}>
                   <DollarSign className="h-4 w-4 text-white" />
                 </div>
               </CardHeader>
               <CardContent>
                 <div
-                  className={`text-2xl font-bold ${
-                    (dreData?.current.netProfit || 0) >= 0
-                      ? "text-emerald-700"
-                      : "text-red-700"
-                  }`}
+                  className={`text-2xl font-bold ${(dreData?.current.netProfit || 0) >= 0
+                    ? "text-emerald-700"
+                    : "text-red-700"
+                    }`}
                   data-testid="text-net-profit"
                 >
                   {formatCurrency(dreData?.current.netProfit || 0)}
@@ -609,11 +603,10 @@ export default function DRE() {
                       <TrendingDown className="h-3 w-3 text-red-600" />
                     )}
                     <span
-                      className={`font-medium ${
-                        dreData.percentageChange.netProfit >= 0
-                          ? "text-emerald-600"
-                          : "text-red-600"
-                      }`}
+                      className={`font-medium ${dreData.percentageChange.netProfit >= 0
+                        ? "text-emerald-600"
+                        : "text-red-600"
+                        }`}
                     >
                       {dreData.percentageChange.netProfit >= 0 ? "+" : ""}
                       {dreData.percentageChange.netProfit.toFixed(1)}%
@@ -655,8 +648,8 @@ export default function DRE() {
                     item.label === "RECEITA BRUTA"
                       ? dreData?.percentageChange?.grossRevenue
                       : item.label === "LUCRO LÍQUIDO"
-                      ? dreData?.percentageChange?.netProfit
-                      : undefined
+                        ? dreData?.percentageChange?.netProfit
+                        : undefined
                   }
                 />
               ))}

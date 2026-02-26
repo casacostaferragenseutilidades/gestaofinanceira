@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -77,11 +76,11 @@ const paymentConfigSchema = z.object({
 });
 
 export default function PaymentSettings() {
-    const [activeTab, setActiveTab] = useState("taxas");
-    const [bankDialogOpen, setBankDialogOpen] = useState(false);
-    const [configDialogOpen, setConfigDialogOpen] = useState(false);
-    const [editingBank, setEditingBank] = useState<BankAccount | null>(null);
-    const [editingConfig, setEditingConfig] = useState<PaymentConfig | null>(null);
+    const [activeTab, setActiveTab] = React.useState("taxas");
+    const [bankDialogOpen, setBankDialogOpen] = React.useState(false);
+    const [configDialogOpen, setConfigDialogOpen] = React.useState(false);
+    const [editingBank, setEditingBank] = React.useState<BankAccount | null>(null);
+    const [editingConfig, setEditingConfig] = React.useState<PaymentConfig | null>(null);
     const { toast } = useToast();
 
     // QUERIES

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp,
@@ -50,8 +50,8 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import type { CashFlowData, CashFlowKPIs, CashFlowAlert, DailyMovement } from "@shared/schema";
 
 export default function CashFlow() {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [period, setPeriod] = useState("daily");
+  const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+  const [period, setPeriod] = React.useState("daily");
   const queryClient = useQueryClient();
 
   const { data: cashFlowData, isLoading } = useQuery<CashFlowData[]>({
@@ -366,15 +366,14 @@ export default function CashFlow() {
               <div className="space-y-3">
                 {alerts.map((alert, index) => (
                   <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                    <AlertCircle className={`h-5 w-5 mt-0.5 ${
-                      alert.severity === 'high' ? 'text-red-500' :
-                      alert.severity === 'medium' ? 'text-yellow-500' : 'text-blue-500'
-                    }`} />
+                    <AlertCircle className={`h-5 w-5 mt-0.5 ${alert.severity === 'high' ? 'text-red-500' :
+                        alert.severity === 'medium' ? 'text-yellow-500' : 'text-blue-500'
+                      }`} />
                     <div className="flex-1">
                       <p className="text-sm font-medium">{alert.message}</p>
                       <Badge variant="outline" className="text-xs mt-1">
                         {alert.severity === 'high' ? 'Alto' :
-                         alert.severity === 'medium' ? 'Médio' : 'Baixo'}
+                          alert.severity === 'medium' ? 'Médio' : 'Baixo'}
                       </Badge>
                     </div>
                   </div>
@@ -503,7 +502,7 @@ export default function CashFlow() {
                       e.preventDefault();
                       const formData = new FormData(e.currentTarget);
                       const movementType = formData.get("movementType") as string;
-                      
+
                       if (movementType === "balance") {
                         // Handle balance adjustment
                         const balanceEntry = {
@@ -575,7 +574,7 @@ export default function CashFlow() {
                         />
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="type">Tipo*</Label>
@@ -617,7 +616,7 @@ export default function CashFlow() {
                         required
                       />
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="category">Categoria*</Label>
@@ -710,7 +709,7 @@ export default function CashFlow() {
                         />
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="status">Status*</Label>
@@ -739,7 +738,7 @@ export default function CashFlow() {
                         </Select>
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="dueDate">Data de Vencimento</Label>
@@ -760,7 +759,7 @@ export default function CashFlow() {
                         />
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="document">Documento (NF, Recibo, Contrato)</Label>
                       <Input
@@ -783,7 +782,7 @@ export default function CashFlow() {
                         </SelectContent>
                       </Select>
                     </div>
-                    
+
                     <div className="flex justify-end gap-2 pt-4">
                       <Button
                         type="button"
@@ -850,11 +849,10 @@ export default function CashFlow() {
                       </TableCell>
                       <TableCell>{movement.account}</TableCell>
                       <TableCell>{movement.paymentMethod}</TableCell>
-                      <TableCell className={`text-right font-semibold ${
-                        movement.type === 'income' 
-                          ? 'text-green-600 dark:text-green-400' 
+                      <TableCell className={`text-right font-semibold ${movement.type === 'income'
+                          ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
-                      }`}>
+                        }`}>
                         {movement.type === 'income' ? '+' : '-'}{formatCurrency(movement.amount)}
                       </TableCell>
                       <TableCell>

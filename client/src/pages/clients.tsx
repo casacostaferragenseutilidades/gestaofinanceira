@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -65,9 +65,9 @@ const clientFormSchema = z.object({
 type ClientFormData = z.infer<typeof clientFormSchema>;
 
 export default function Clients() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [editingClient, setEditingClient] = React.useState<Client | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState("");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -183,7 +183,7 @@ export default function Clients() {
     client.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const stats = useMemo(() => {
+  const stats = React.useMemo(() => {
     if (!clients) return { total: 0, active: 0, recent: 0 };
 
     const thirtyDaysAgo = new Date();

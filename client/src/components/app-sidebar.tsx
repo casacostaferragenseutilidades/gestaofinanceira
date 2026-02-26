@@ -40,7 +40,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { useState } from "react";
+import * as React from "react";
 
 const mainNavItems = [
   {
@@ -167,7 +167,7 @@ const adminNavItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [expandedItems, setExpandedItems] = React.useState<string[]>([]);
 
   const toggleExpanded = (title: string) => {
     setExpandedItems(prev =>

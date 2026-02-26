@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,7 +43,10 @@ import {
   Grid3X3,
   List,
   BarChart3,
+  FileSearch,
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -145,17 +148,51 @@ const paymentFormSchema = z.object({
 type PaymentFormData = z.infer<typeof paymentFormSchema>;
 
 export default function AccountsPayable() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingAccount, setEditingAccount] = useState<AccountPayable | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [activeFilter, setActiveFilter] = useState<string>("active");
-  const [dateFilter, setDateFilter] = useState<{ start: string; end: string }>({ start: "", end: "" });
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [accountToPay, setAccountToPay] = useState<AccountPayable | null>(null);
-  const [newSupplierDialogOpen, setNewSupplierDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [editingAccount, setEditingAccount] = React.useState<AccountPayable | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<string>("all");
+  const [activeFilter, setActiveFilter] = React.useState<string>("active");
+  const getDefaultDateRange = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    const formatDateStr = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    return {
+      start: formatDateStr(firstDay),
+      end: formatDateStr(lastDay)
+    };
+  };
+
+  const [dateFilter, setDateFilter] = React.useState<{ start: string; end: string }>(getDefaultDateRange);
+  const [paymentDialogOpen, setPaymentDialogOpen] = React.useState(false);
+  const [accountToPay, setAccountToPay] = React.useState<AccountPayable | null>(null);
+  const [newSupplierDialogOpen, setNewSupplierDialogOpen] = React.useState(false);
+  const [viewMode, setViewMode] = React.useState<"table" | "cards">("table");
+  const [empresaAtiva, setEmpresaAtiva] = React.useState<any>(null);
+  const [showOnlyFilled, setShowOnlyFilled] = React.useState(false);
   const { toast } = useToast();
+
+  React.useEffect(() => {
+    const stored = localStorage.getItem('empresaAtiva');
+    if (stored) {
+      try {
+        setEmpresaAtiva(JSON.parse(stored));
+      } catch (e) {
+        console.error('Error parsing empresaAtiva', e);
+      }
+    }
+  }, []);
+
 
   const { data: accounts, isLoading } = useQuery<AccountPayable[]>({
     queryKey: ["/api/accounts-payable"],
@@ -493,17 +530,20 @@ export default function AccountsPayable() {
     const matchesDateRange = (!dateFilter.start || account.dueDate >= dateFilter.start) &&
       (!dateFilter.end || account.dueDate <= dateFilter.end);
 
-    return matchesSearch && matchesStatus && matchesActive && matchesDateRange;
+    // Company filter
+    const matchesCompany = !empresaAtiva || account.companyId === empresaAtiva.id;
+
+    return matchesSearch && matchesStatus && matchesActive && matchesDateRange && matchesCompany;
   }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()) || [];
 
   // Calculate statistics based on filtered accounts
   const stats = {
     total: filteredAccounts.reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
-    pending: filteredAccounts.filter(acc => acc.status === "pending").reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
+    pending: filteredAccounts.filter(acc => acc.status === "pending" && !isOverdue(acc.dueDate, acc.status)).reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
     paid: filteredAccounts.filter(acc => acc.status === "paid").reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
     overdue: filteredAccounts.filter(acc => isOverdue(acc.dueDate, acc.status)).reduce((sum, acc) => sum + parseFloat(acc.amount), 0),
     overdueCount: filteredAccounts.filter(acc => isOverdue(acc.dueDate, acc.status)).length,
-    pendingCount: filteredAccounts.filter(acc => acc.status === "pending").length,
+    pendingCount: filteredAccounts.filter(acc => acc.status === "pending" && !isOverdue(acc.dueDate, acc.status)).length,
     paidCount: filteredAccounts.filter(acc => acc.status === "paid").length,
     totalLateFees: filteredAccounts.reduce((sum, acc) => sum + (acc.lateFees && acc.lateFees !== null ? parseFloat(acc.lateFees) : 0), 0),
     totalDiscount: filteredAccounts.reduce((sum, acc) => sum + (acc.discount && acc.discount !== null ? parseFloat(acc.discount) : 0), 0),
@@ -1684,7 +1724,17 @@ export default function AccountsPayable() {
                       <Grid3X3 className="h-4 w-4" />
                     </Button>
                   </div>
-                  {(searchTerm || statusFilter !== "all" || activeFilter !== "active" || dateFilter.start || dateFilter.end) && (
+                  <div className="flex items-center gap-2 px-3 border-l ml-2">
+                    <Switch
+                      id="filled-mode"
+                      checked={showOnlyFilled}
+                      onCheckedChange={setShowOnlyFilled}
+                    />
+                    <Label htmlFor="filled-mode" className="text-xs cursor-pointer whitespace-nowrap">
+                      Apenas Preenchidos
+                    </Label>
+                  </div>
+                  {(searchTerm || statusFilter !== "all" || activeFilter !== "active" || dateFilter.start !== getDefaultDateRange().start || dateFilter.end !== getDefaultDateRange().end) && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1692,7 +1742,7 @@ export default function AccountsPayable() {
                         setSearchTerm("");
                         setStatusFilter("all");
                         setActiveFilter("active");
-                        setDateFilter({ start: "", end: "" });
+                        setDateFilter(getDefaultDateRange());
                       }}
                       title="Limpar filtros"
                     >
@@ -1934,23 +1984,53 @@ export default function AccountsPayable() {
 
                           <div className="space-y-2 mb-3">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">Fornecedor:</span>
-                              <span className="text-sm font-medium truncate max-w-[150px]">
-                                {supplier ? supplier.name : "-"}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">Categoria:</span>
-                              <span className="text-sm font-medium">
-                                {category ? category.name : "-"}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between">
                               <span className="text-sm text-muted-foreground">Vencimento:</span>
                               <span className="text-sm font-medium">{formatDate(account.dueDate)}</span>
                             </div>
+
+                            {/* Detalhes que aparecem apenas se houver dados ou se "showOnlyFilled" estiver desativado */}
+                            {(!showOnlyFilled || (supplier && supplier.name)) && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Fornecedor:</span>
+                                <span className="text-sm font-medium truncate max-w-[150px]">
+                                  {supplier ? supplier.name : "-"}
+                                </span>
+                              </div>
+                            )}
+
+                            {(!showOnlyFilled || (category && category.name)) && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Categoria:</span>
+                                <span className="text-sm font-medium">
+                                  {category ? category.name : "-"}
+                                </span>
+                              </div>
+                            )}
+
+                            {(!showOnlyFilled || account.costCenterId) && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">C. Custo:</span>
+                                <span className="text-sm font-medium">
+                                  {costCenters?.find(cc => cc.id === account.costCenterId)?.name || "-"}
+                                </span>
+                              </div>
+                            )}
+
+                            {(!showOnlyFilled || account.notes) && account.notes && (
+                              <div className="pt-2 border-t mt-2">
+                                <span className="text-xs text-muted-foreground block mb-1 font-semibold uppercase">Observações:</span>
+                                <p className="text-xs text-muted-foreground line-clamp-2 italic">
+                                  {account.notes}
+                                </p>
+                              </div>
+                            )}
+
+                            {(!showOnlyFilled || account.invoiceNumber) && account.invoiceNumber && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">NF nº:</span>
+                                <span className="font-medium">{account.invoiceNumber}</span>
+                              </div>
+                            )}
                           </div>
 
                           <div className="border-t pt-3 space-y-2">

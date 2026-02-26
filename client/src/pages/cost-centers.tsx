@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -59,9 +59,9 @@ const costCenterFormSchema = z.object({
 type CostCenterFormData = z.infer<typeof costCenterFormSchema>;
 
 export default function CostCenters() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingCostCenter, setEditingCostCenter] = useState<CostCenter | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [editingCostCenter, setEditingCostCenter] = React.useState<CostCenter | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState("");
   const { toast } = useToast();
 
   const { data: costCenters, isLoading } = useQuery<CostCenter[]>({
@@ -244,8 +244,8 @@ export default function CostCenters() {
                     {createMutation.isPending || updateMutation.isPending
                       ? "Salvando..."
                       : editingCostCenter
-                      ? "Atualizar"
-                      : "Cadastrar"}
+                        ? "Atualizar"
+                        : "Cadastrar"}
                   </Button>
                 </DialogFooter>
               </form>

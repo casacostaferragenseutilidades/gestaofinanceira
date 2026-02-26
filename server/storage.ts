@@ -1046,11 +1046,11 @@ export class DatabaseStorage implements IStorage {
         .reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0);
 
     const pendingReceivables = filteredReceivables
-      .filter(r => r.status === "pending")
+      .filter(r => r.status === "pending" && r.dueDate >= todayStr)
       .reduce((sum, r) => sum + parseFloat(r.amount || "0"), 0);
 
     const pendingPayables = filteredPayables
-      .filter(p => p.status === "pending")
+      .filter(p => p.status === "pending" && p.dueDate >= todayStr)
       .reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
 
     const overduePayables = startDate && endDate
