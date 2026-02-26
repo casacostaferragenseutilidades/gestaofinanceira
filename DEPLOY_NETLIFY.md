@@ -89,9 +89,7 @@ O projeto usa configuração otimizada para Netlify:
 gestao-financeira-2026/
 ├── netlify.toml              # Configuração do Netlify
 ├── netlify/functions/         # Funções serverless (gerado automaticamente)
-│   ├── api.js
-│   ├── api-handler.js
-│   └── package.json
+│   └── api.ts
 ├── dist/public/              # Arquivos estáticos do frontend
 └── server/                   # Código fonte do backend
 ```
