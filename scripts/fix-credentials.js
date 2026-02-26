@@ -34,14 +34,14 @@ async function fixCredentials() {
 
   try {
     // Obter PROJECT_REF
-    const projectUrl = await question('🌐 Cole a URL completa do seu projeto Supabase (ex: https://uxncnpfywehwwsdjejtp.supabase.co): ');
+    const projectUrl = await question('🌐 Cole a URL completa do seu projeto Supabase (ex: https://project-ref.supabase.co): ');
     const projectRef = projectUrl.replace('https://', '').replace('.supabase.co', '').trim();
-    
+
     console.log(`✅ PROJECT_REF extraído: ${projectRef}`);
 
     // Obter connection string completa
     const connectionString = await question('📡 Cole a Connection String completa do Settings > Database: ');
-    
+
     // Obter chaves
     const anonKey = await question('🔑 Cole a ANON_KEY: ');
     const serviceKey = await question('🛡️ Cole a SERVICE_ROLE_KEY: ');
@@ -78,21 +78,21 @@ PORT=5001
 
     console.log('\n✅ Arquivo .env reconfigurado com sucesso!');
     console.log('📍 Local:', envPath);
-    
+
     // Testar conexão
     console.log('\n🧪 Testando nova configuração...');
     const { execSync } = await import('child_process');
-    
+
     try {
-      const testResult = execSync('node scripts/test-db-connection.js', { 
-        cwd: projectRoot, 
+      const testResult = execSync('node scripts/test-db-connection.js', {
+        cwd: projectRoot,
         encoding: 'utf8',
         stdio: 'pipe'
       });
-      
+
       console.log(testResult);
       console.log('\n🎉 Tudo pronto! Execute "npm run dev" para iniciar a aplicação.');
-      
+
     } catch (testError) {
       console.log('❌ Ainda há problemas com a conexão:');
       console.log(testError.stdout || testError.message);

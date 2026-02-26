@@ -26,15 +26,14 @@
 - **Start Command:** `npm start`
 
 **Environment Variables:**
-```bash
 NODE_ENV=production
 PORT=10000
-DATABASE_URL=postgresql://postgres.uxncnpfywehwwsdjejtp:WxnIzc30jekYhNlX@aws-0-us-west-2.pooler.supabase.com:6543/postgres
-SUPABASE_URL=https://uxncnpfywehwwsdjejtp.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4bmNucGZ5d2Vod3dzZGplanRwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAzNzc5OCwiZXhwIjoyMDgwNjEzNzk4fQ.seWtDBWMXqRlRFk840E2bZ9aqdaDMQwFo2_iaCdWrtE
-VITE_SUPABASE_URL=https://uxncnpfywehwwsdjejtp.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4bmNucGZ5d2Vod3dzZGplanRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMzc3OTgsImV4cCI6MjA4MDYxMzc5OH0.c1fJCn9u_om8gGFCWTOyeZeRFpI_xRwzwPb3HFz_MFg
-SESSION_SECRET=fincontrol-secret-key-1768568149516-change-in-production
+DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:[PORT]/postgres
+SUPABASE_URL=https://[PROJECT_REF].supabase.co
+SUPABASE_SERVICE_ROLE_KEY=[SERVICE_ROLE_KEY]
+VITE_SUPABASE_URL=https://[PROJECT_REF].supabase.co
+VITE_SUPABASE_ANON_KEY=[ANON_KEY]
+SESSION_SECRET=[RANDOM_SECRET]
 ```
 
 ### Passo 3: Deploy

@@ -1,15 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase configuration
-const supabaseUrl = 'https://uxncnpfywehwwsdjejtp.supabase.co';
-const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4bmNucGZ5d2Vod3dzZGplanRwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAzNzc5OCwiZXhwIjoyMDgwNjEzNzk4fQ.seWtDBWMXqRlRFk840E2bZ9aqdaDMQwFo2_iaCdWrtE';
+const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function createUsers() {
   try {
     console.log('Creating users in Supabase...');
-    
+
     // Create admin user
     console.log('Creating admin user...');
     const { data: adminData, error: adminError } = await supabase.auth.admin.createUser({
@@ -24,7 +24,7 @@ async function createUsers() {
 
     if (adminError) {
       console.log('Admin user creation failed:', adminError.message);
-      
+
       // Check if user already exists
       if (adminError.message.includes('already registered')) {
         console.log('Admin user already exists');
@@ -47,7 +47,7 @@ async function createUsers() {
 
     if (userError) {
       console.log('Regular user creation failed:', userError.message);
-      
+
       // Check if user already exists
       if (userError.message.includes('already registered')) {
         console.log('Regular user already exists');
@@ -58,14 +58,14 @@ async function createUsers() {
 
     // Test login with both users
     console.log('\n=== Testing login ===');
-    
+
     // Test admin login
     console.log('Testing admin login...');
     const { data: adminLogin, error: adminLoginError } = await supabase.auth.signInWithPassword({
       email: 'admin@financeirototal.com',
       password: 'admin123'
     });
-    
+
     if (adminLoginError) {
       console.log('Admin login failed:', adminLoginError.message);
     } else {
@@ -78,7 +78,7 @@ async function createUsers() {
       email: 'user@financeirototal.com',
       password: 'user123'
     });
-    
+
     if (userLoginError) {
       console.log('Regular user login failed:', userLoginError.message);
     } else {
@@ -86,7 +86,7 @@ async function createUsers() {
     }
 
     console.log('\n=== Users created and tested successfully ===');
-    
+
   } catch (error) {
     console.error('Unexpected error:', error);
   }
