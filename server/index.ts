@@ -17,7 +17,7 @@ import { sql } from "drizzle-orm";
 console.log("[Server] Modules loaded, initializing application...");
 
 const app = express();
-const httpServer = process.env.VERCEL ? null : createServer(app);
+const httpServer = (process.env.VERCEL || process.env.NETLIFY) ? null : createServer(app);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -85,13 +85,14 @@ const initPromise = (async () => {
     await setupAuth(app);
     log("✓ Auth setup completed");
 
-    registerRoutes(httpServer!, app);
+    // registerRoutes now accepts null for httpServer
+    registerRoutes(httpServer, app);
     log("✓ Routes registered");
 
     if (app.get("env") === "development") {
       const { setupVite } = await import("./vite");
       await setupVite(httpServer!, app);
-    } else {
+    } else if (!process.env.VERCEL && !process.env.NETLIFY) {
       serveStatic(app);
     }
 

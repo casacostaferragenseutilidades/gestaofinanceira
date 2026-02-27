@@ -57,19 +57,30 @@ declare global {
 export async function setupAuth(app: Express): Promise<void> {
   let sessionStore: any;
 
-  if (process.env.VERCEL) {
-    const createMemoryStore = (await import("memorystore")).default;
-    const MemoryStore = createMemoryStore(session);
-    sessionStore = new MemoryStore({
-      checkPeriod: 86400000 // prune expired entries every 24h
-    });
+  if (process.env.VERCEL || process.env.NETLIFY) {
+    // On serverless environments, we prefer a persistent store if DATABASE_URL is available
+    if (process.env.DATABASE_URL) {
+      const connectPgSimple = (await import("connect-pg-simple")).default;
+      const PgSession = connectPgSimple(session);
+      sessionStore = new PgSession({
+        pool,
+        tableName: "user_sessions",
+        createTableIfMissing: true,
+      });
+    } else {
+      const createMemoryStore = (await import("memorystore")).default;
+      const MemoryStore = createMemoryStore(session);
+      sessionStore = new MemoryStore({
+        checkPeriod: 86400000 // prune expired entries every 24h
+      });
+    }
   } else {
     const connectPgSimple = (await import("connect-pg-simple")).default;
     const PgSession = connectPgSimple(session);
     sessionStore = new PgSession({
       pool,
       tableName: "user_sessions",
-      createTableIfMissing: false,
+      createTableIfMissing: true,
     });
   }
 
