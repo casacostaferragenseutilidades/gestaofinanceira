@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -178,6 +179,7 @@ export default function AccountsPayable() {
   const [accountToPay, setAccountToPay] = React.useState<AccountPayable | null>(null);
   const [newSupplierDialogOpen, setNewSupplierDialogOpen] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<"table" | "cards">("table");
+  const [selectedAccounts, setSelectedAccounts] = React.useState<string[]>([]);
   const [empresaAtiva, setEmpresaAtiva] = React.useState<any>(null);
   const [showOnlyFilled, setShowOnlyFilled] = React.useState(false);
   const { toast } = useToast();
@@ -420,6 +422,30 @@ export default function AccountsPayable() {
     },
   });
 
+  const bulkMarkAsPaidMutation = useMutation({
+    mutationFn: async ({ ids, paymentDate, paymentMethod }: { ids: string[], paymentDate: string, paymentMethod?: string }) => {
+      await apiRequest("POST", `/api/accounts-payable/bulk-pay`, {
+        ids,
+        paymentDate,
+        paymentMethod
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts-payable"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      toast({ title: "Contas pagas com sucesso!" });
+      setSelectedAccounts([]);
+      setPaymentDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao realizar pagamento em massa",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (data: AccountPayableFormData) => {
     if (editingAccount) {
       updateMutation.mutate({ ...data, id: editingAccount.id });
@@ -434,6 +460,11 @@ export default function AccountsPayable() {
         id: accountToPay.id,
         lateFees: data.lateFees,
         discount: data.discount,
+        paymentDate: data.paymentDate,
+      });
+    } else if (selectedAccounts.length > 0) {
+      bulkMarkAsPaidMutation.mutate({
+        ids: selectedAccounts,
         paymentDate: data.paymentDate,
       });
     }
@@ -454,6 +485,29 @@ export default function AccountsPayable() {
     if (!open) {
       setAccountToPay(null);
       paymentForm.reset();
+    }
+  };
+
+  const handleBulkPay = () => {
+    paymentForm.reset({
+      lateFees: "",
+      discount: "",
+      paymentDate: new Date().toISOString().split("T")[0],
+    });
+    setPaymentDialogOpen(true);
+  };
+
+  const toggleAccountSelection = (id: string) => {
+    setSelectedAccounts(prev =>
+      prev.includes(id) ? prev.filter(accountId => accountId !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAllSelected = (accountsToToggle: AccountPayable[]) => {
+    if (selectedAccounts.length === accountsToToggle.length && accountsToToggle.length > 0) {
+      setSelectedAccounts([]);
+    } else {
+      setSelectedAccounts(accountsToToggle.map(a => a.id));
     }
   };
 
@@ -1635,18 +1689,29 @@ export default function AccountsPayable() {
               <h2 className="text-2xl font-bold">Lista de Contas</h2>
               <p className="text-sm text-muted-foreground">Gerencie todas as suas contas a pagar</p>
             </div>
-            <Button
-              onClick={() => {
-                setEditingAccount(null);
-                form.reset();
-                setIsOpen(true);
-              }}
-              className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 shadow-lg"
-              data-testid="button-new-account"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Nova Conta
-            </Button>
+            <div className="flex gap-2">
+              {selectedAccounts.length > 0 && (
+                <Button
+                  onClick={handleBulkPay}
+                  className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Pagar Selecionados ({selectedAccounts.length})
+                </Button>
+              )}
+              <Button
+                onClick={() => {
+                  setEditingAccount(null);
+                  form.reset();
+                  setIsOpen(true);
+                }}
+                className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 shadow-lg"
+                data-testid="button-new-account"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Conta
+              </Button>
+            </div>
           </div>
 
           {/* Filtros - Layout Compacto */}
@@ -1772,6 +1837,12 @@ export default function AccountsPayable() {
                   <Table>
                     <TableHeader>
                       <TableRow className="border-b-2 bg-muted/30">
+                        <TableHead className="w-[40px] px-4">
+                          <Checkbox
+                            checked={selectedAccounts.length === filteredAccounts.length && filteredAccounts.length > 0}
+                            onCheckedChange={() => toggleAllSelected(filteredAccounts)}
+                          />
+                        </TableHead>
                         <TableHead className="font-semibold text-sm">Descrição</TableHead>
                         <TableHead className="font-semibold text-sm">Fornecedor</TableHead>
                         <TableHead className="font-semibold text-sm">Categoria</TableHead>
@@ -1802,6 +1873,12 @@ export default function AccountsPayable() {
                             data-testid={`row-payable-${account.id}`}
                             className={`hover:bg-muted/50 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
                           >
+                            <TableCell className="px-4">
+                              <Checkbox
+                                checked={selectedAccounts.includes(account.id)}
+                                onCheckedChange={() => toggleAccountSelection(account.id)}
+                              />
+                            </TableCell>
                             <TableCell className="font-medium max-w-[200px]">
                               <div className="truncate" title={account.description}>
                                 {account.description}
@@ -1935,14 +2012,20 @@ export default function AccountsPayable() {
                       <Card key={account.id} className="hover:shadow-lg transition-all duration-200 group">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between mb-3">
-                            <Badge className={`${getStatusColor(displayStatus)} px-3 py-1`}>
-                              <div className="flex items-center gap-2">
-                                {displayStatus === "paid" && <CheckCircle className="h-3 w-3" />}
-                                {displayStatus === "pending" && <Clock className="h-3 w-3" />}
-                                {displayStatus === "overdue" && <AlertTriangle className="h-3 w-3" />}
-                                <span className="font-medium">{getStatusLabel(displayStatus)}</span>
-                              </div>
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={selectedAccounts.includes(account.id)}
+                                onCheckedChange={() => toggleAccountSelection(account.id)}
+                              />
+                              <Badge className={`${getStatusColor(displayStatus)} px-3 py-1`}>
+                                <div className="flex items-center gap-2">
+                                  {displayStatus === "paid" && <CheckCircle className="h-3 w-3" />}
+                                  {displayStatus === "pending" && <Clock className="h-3 w-3" />}
+                                  {displayStatus === "overdue" && <AlertTriangle className="h-3 w-3" />}
+                                  <span className="font-medium">{getStatusLabel(displayStatus)}</span>
+                                </div>
+                              </Badge>
+                            </div>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">

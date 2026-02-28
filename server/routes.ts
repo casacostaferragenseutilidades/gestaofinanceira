@@ -458,6 +458,20 @@ export function registerRoutes(
     res.json(account);
   });
 
+  app.post("/api/accounts-payable/bulk-pay", requireFinancial, async (req, res) => {
+    try {
+      const { ids, paymentDate, paymentMethod } = req.body;
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "Lista de IDs inválida" });
+      }
+      const updated = await storage.bulkMarkAccountsPayableAsPaid(ids, paymentDate, paymentMethod);
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error in bulk pay:", error);
+      res.status(500).json({ error: "Erro ao processar pagamento em massa", details: error.message });
+    }
+  });
+
   app.delete("/api/accounts-payable/:id", requireFinancial, async (req, res) => {
     await storage.deleteAccountPayable(req.params.id);
     res.status(204).send();

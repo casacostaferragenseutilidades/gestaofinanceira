@@ -75,6 +75,7 @@ export interface IStorage {
   createAccountPayable(account: InsertAccountPayable): Promise<AccountPayable>;
   updateAccountPayable(id: string, account: Partial<InsertAccountPayable>): Promise<AccountPayable | undefined>;
   markAccountPayableAsPaid(id: string, paymentDate: string, lateFees?: string, discount?: string): Promise<AccountPayable | undefined>;
+  bulkMarkAccountsPayableAsPaid(ids: string[], paymentDate: string, paymentMethod?: string): Promise<AccountPayable[]>;
   deleteAccountPayable(id: string): Promise<boolean>;
   deactivateAccountPayable(id: string): Promise<AccountPayable | undefined>;
 
@@ -857,6 +858,19 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db.update(accountsPayable)
       .set(updateData)
       .where(eq(accountsPayable.id, id))
+      .returning();
+    return updated;
+  }
+
+  async bulkMarkAccountsPayableAsPaid(ids: string[], paymentDate: string, paymentMethod?: string): Promise<AccountPayable[]> {
+    const updateData: any = { status: "paid", paymentDate };
+    if (paymentMethod !== undefined) {
+      updateData.paymentMethod = paymentMethod || null;
+    }
+
+    const updated = await db.update(accountsPayable)
+      .set(updateData)
+      .where(inArray(accountsPayable.id, ids))
       .returning();
     return updated;
   }

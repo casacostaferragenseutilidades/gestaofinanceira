@@ -149,6 +149,8 @@ export default function AccountsReceivable() {
   const [receivedDate, setReceivedDate] = React.useState<string>(new Date().toISOString().split("T")[0]);
   const [showOnlyFilled, setShowOnlyFilled] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState<string>("");
+  const [paymentDialogOpen, setPaymentDialogOpen] = React.useState(false);
+  const [accountToReceive, setAccountToReceive] = React.useState<AccountReceivable | null>(null);
 
   const getDefaultDateRange = () => {
     const today = new Date();
