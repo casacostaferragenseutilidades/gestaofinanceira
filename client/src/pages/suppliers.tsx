@@ -26,6 +26,8 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Filter,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +58,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Form,
   FormControl,
   FormField,
@@ -84,6 +93,7 @@ export default function Suppliers() {
   const [editingSupplier, setEditingSupplier] = React.useState<Supplier | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [viewMode, setViewMode] = React.useState<"cards" | "table">("table");
+  const [statusFilter, setStatusFilter] = React.useState("all");
   const [sortConfig, setSortConfig] = React.useState<{ key: keyof Supplier; direction: 'asc' | 'desc' } | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -165,6 +175,24 @@ export default function Suppliers() {
     },
   });
 
+  const activateMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("PATCH", `/api/suppliers/${id}/activate`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
+      toast({
+        title: "Sucesso",
+        description: "Fornecedor reativado com sucesso.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível reativar o fornecedor.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (data: SupplierFormData) => {
     if (editingSupplier) {
       updateMutation.mutate({ ...data, id: editingSupplier.id });
@@ -237,9 +265,17 @@ export default function Suppliers() {
   };
 
   const filteredSuppliers = React.useMemo(() => {
-    let filtered = suppliers?.filter((supplier) =>
-      supplier.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ) || [];
+    let filtered = suppliers?.filter((supplier) => {
+      const matchesSearch = supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (supplier.document && supplier.document.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (supplier.email && supplier.email.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      const matchesStatus = statusFilter === "all" || 
+        (statusFilter === "active" && supplier.active) ||
+        (statusFilter === "inactive" && !supplier.active);
+      
+      return matchesSearch && matchesStatus;
+    }) || [];
 
     if (sortConfig) {
       filtered.sort((a, b) => {
@@ -257,7 +293,7 @@ export default function Suppliers() {
     }
 
     return filtered;
-  }, [suppliers, searchTerm, sortConfig]);
+  }, [suppliers, searchTerm, statusFilter, sortConfig]);
 
   const stats = React.useMemo(() => {
     if (!suppliers) return { total: 0, active: 0, recent: 0 };
@@ -289,195 +325,205 @@ export default function Suppliers() {
 
   return (
     <div className="p-6 space-y-6 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent" data-testid="text-page-title">Fornecedores</h1>
-          <p className="text-muted-foreground mt-2">
-            Gerencie seu cadastro de fornecedores e parceiros comerciais
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 border rounded-md p-1">
-            <Button
-              variant={viewMode === "cards" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("cards")}
-              data-testid="button-view-cards"
-            >
-              <Grid3X3 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === "table" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("table")}
-              data-testid="button-view-table"
-            >
-              <TableIcon className="h-4 w-4" />
-            </Button>
+      {/* Header Moderno */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 rounded-2xl shadow-xl">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-20"></div>
+        <div className="relative p-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-white" data-testid="text-page-title">Fornecedores</h1>
+              <p className="text-blue-100 mt-1 text-sm">
+                Gerencie seu cadastro de fornecedores e parceiros comerciais
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-lg p-1">
+                <Button
+                  variant={viewMode === "cards" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("cards")}
+                  className={viewMode === "cards" ? "bg-white text-blue-700" : "text-white hover:bg-white/20"}
+                  data-testid="button-view-cards"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "table" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("table")}
+                  className={viewMode === "table" ? "bg-white text-blue-700" : "text-white hover:bg-white/20"}
+                  data-testid="button-view-table"
+                >
+                  <TableIcon className="h-4 w-4" />
+                </Button>
+              </div>
+              <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="bg-white text-blue-700 hover:bg-blue-50 shadow-lg"
+                    data-testid="button-new-supplier"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Novo Fornecedor
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingSupplier ? "Editar Fornecedor" : "Novo Fornecedor"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      Preencha os dados do fornecedor
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nome *</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Nome do fornecedor"
+                                {...field}
+                                data-testid="input-name"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="document"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>CNPJ/CPF</FormLabel>
+                            <FormControl>
+                              <div className="flex gap-2">
+                                <Input
+                                  placeholder="00.000.000/0000-00"
+                                  {...field}
+                                  data-testid="input-document"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => searchCNPJ(field.value || "")}
+                                  disabled={!field.value || (field.value as string).replace(/[^\d]/g, '').length !== 14}
+                                >
+                                  <SearchIcon className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>E-mail</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="email"
+                                  placeholder="email@exemplo.com"
+                                  {...field}
+                                  data-testid="input-email"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="phone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Telefone</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="(00) 00000-0000"
+                                  {...field}
+                                  data-testid="input-phone"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="contact"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Contato</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="Nome do contato"
+                                  {...field}
+                                  data-testid="input-contact"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="address"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Endereço</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="Endereço completo"
+                                  {...field}
+                                  data-testid="input-address"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleOpenChange(false)}
+                          data-testid="button-cancel"
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="submit"
+                          disabled={createMutation.isPending || updateMutation.isPending}
+                          data-testid="button-submit"
+                        >
+                          {createMutation.isPending || updateMutation.isPending
+                            ? "Salvando..."
+                            : editingSupplier
+                              ? "Atualizar"
+                              : "Cadastrar"}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
-          <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-new-supplier">
-                <Plus className="h-4 w-4 mr-2" />
-                Novo Fornecedor
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingSupplier ? "Editar Fornecedor" : "Novo Fornecedor"}
-                </DialogTitle>
-                <DialogDescription>
-                  Preencha os dados do fornecedor
-                </DialogDescription>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nome *</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Nome do fornecedor"
-                            {...field}
-                            data-testid="input-name"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="document"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CNPJ/CPF</FormLabel>
-                        <FormControl>
-                          <div className="flex gap-2">
-                            <Input
-                              placeholder="00.000.000/0000-00"
-                              {...field}
-                              data-testid="input-document"
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => searchCNPJ(field.value || "")}
-                              disabled={!field.value || (field.value as string).replace(/[^\d]/g, '').length !== 14}
-                            >
-                              <SearchIcon className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>E-mail</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="email"
-                              placeholder="email@exemplo.com"
-                              {...field}
-                              data-testid="input-email"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Telefone</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="(00) 00000-0000"
-                              {...field}
-                              data-testid="input-phone"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="contact"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Contato</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Nome do contato"
-                              {...field}
-                              data-testid="input-contact"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="address"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Endereço</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Endereço completo"
-                              {...field}
-                              data-testid="input-address"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleOpenChange(false)}
-                      data-testid="button-cancel"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={createMutation.isPending || updateMutation.isPending}
-                      data-testid="button-submit"
-                    >
-                      {createMutation.isPending || updateMutation.isPending
-                        ? "Salvando..."
-                        : editingSupplier
-                          ? "Atualizar"
-                          : "Cadastrar"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
-
       {/* Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -526,15 +572,44 @@ export default function Suppliers() {
 
       <Separator className="my-6" />
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar fornecedor por nome, CNPJ ou e-mail..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-9 bg-white/80 backdrop-blur-sm border-0 shadow-lg focus:shadow-xl transition-shadow duration-300"
-          data-testid="input-search"
-        />
+      {/* Filtros Modernos */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar fornecedor por nome, CNPJ ou e-mail..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 bg-white/80 backdrop-blur-sm border-0 shadow-lg focus:shadow-xl transition-shadow duration-300"
+            data-testid="input-search"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[140px] bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="active">Ativos</SelectItem>
+              <SelectItem value="inactive">Inativos</SelectItem>
+            </SelectContent>
+          </Select>
+          {(searchTerm || statusFilter !== "all") && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setSearchTerm("");
+                setStatusFilter("all");
+              }}
+              title="Limpar filtros"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -592,14 +667,25 @@ export default function Suppliers() {
                           <Pencil className="h-4 w-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => deactivateMutation.mutate(supplier.id)}
-                          className="text-destructive"
-                          data-testid={`button-deactivate-${supplier.id}`}
-                        >
-                          <Ban className="h-4 w-4 mr-2" />
-                          Inativar
-                        </DropdownMenuItem>
+                        {supplier.active !== false ? (
+                          <DropdownMenuItem
+                            onClick={() => deactivateMutation.mutate(supplier.id)}
+                            className="text-destructive"
+                            data-testid={`button-deactivate-${supplier.id}`}
+                          >
+                            <Ban className="h-4 w-4 mr-2" />
+                            Inativar
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={() => activateMutation.mutate(supplier.id)}
+                            className="text-green-600"
+                            data-testid={`button-activate-${supplier.id}`}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Reativar
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </CardHeader>
@@ -755,14 +841,25 @@ export default function Suppliers() {
                               <Pencil className="h-4 w-4 mr-2" />
                               Editar
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => deactivateMutation.mutate(supplier.id)}
-                              className="text-destructive"
-                              data-testid={`button-deactivate-${supplier.id}`}
-                            >
-                              <Ban className="h-4 w-4 mr-2" />
-                              Inativar
-                            </DropdownMenuItem>
+                            {supplier.active !== false ? (
+                              <DropdownMenuItem
+                                onClick={() => deactivateMutation.mutate(supplier.id)}
+                                className="text-destructive"
+                                data-testid={`button-deactivate-${supplier.id}`}
+                              >
+                                <Ban className="h-4 w-4 mr-2" />
+                                Inativar
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => activateMutation.mutate(supplier.id)}
+                                className="text-green-600"
+                                data-testid={`button-activate-${supplier.id}`}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Reativar
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

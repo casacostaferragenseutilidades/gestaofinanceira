@@ -89,7 +89,7 @@ const initPromise = (async () => {
     registerRoutes(httpServer, app);
     log("✓ Routes registered");
 
-    if (app.get("env") === "development") {
+    if (app.get("env") === "development" && !process.env.NETLIFY && !process.env.VERCEL) {
       const { setupVite } = await import("./vite");
       await setupVite(httpServer!, app);
     } else if (!process.env.VERCEL && !process.env.NETLIFY) {
@@ -163,7 +163,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.VERCEL && !process.env.NETLI
       }
 
       const port = parseInt(process.env.PORT || "5001", 10);
-      httpServer.listen(port, "0.0.0.0", () => {
+      httpServer?.listen(port, "0.0.0.0", () => {
         log(`serving on port ${port}`);
       });
     } catch (err) {

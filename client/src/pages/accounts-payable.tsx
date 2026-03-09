@@ -94,7 +94,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { formatCurrency, formatDate, getStatusColor, getStatusLabel, isOverdue } from "@/lib/utils";
+import { formatCurrency, formatDate, getStatusColor, getStatusLabel, isOverdue, cn } from "@/lib/utils";
 import type { AccountPayable, Supplier, Category, CostCenter } from "@shared/schema";
 
 const accountPayableFormSchema = z.object({
@@ -148,8 +148,79 @@ const paymentFormSchema = z.object({
 
 type PaymentFormData = z.infer<typeof paymentFormSchema>;
 
+const KPICard = ({
+  title,
+  value,
+  subvalue,
+  icon: Icon,
+  variant = "default",
+  trend,
+  className
+}: {
+  title: string;
+  value: string;
+  subvalue?: string;
+  icon: any;
+  variant?: "default" | "success" | "warning" | "danger" | "info" | "primary" | "secondary";
+  trend?: { value: string; isPositive: boolean };
+  className?: string;
+}) => {
+  const variants = {
+    default: "from-slate-50 to-slate-100 text-slate-900 border-slate-200",
+    primary: "from-primary via-violet-600 to-indigo-700 text-white shadow-primary/20",
+    success: "from-emerald-500 to-teal-600 text-white shadow-emerald-500/20",
+    warning: "from-amber-400 to-orange-500 text-white shadow-amber-500/20",
+    danger: "from-rose-500 to-red-600 text-white shadow-rose-500/20",
+    info: "from-blue-500 to-cyan-600 text-white shadow-blue-500/20",
+    secondary: "from-indigo-500 to-blue-600 text-white shadow-indigo-500/20",
+  };
+
+  return (
+    <Card className={cn(
+      "relative overflow-hidden border-0 shadow-2xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] group",
+      "bg-gradient-to-br",
+      variants[variant as keyof typeof variants],
+      className
+    )}>
+      {/* Decorative pulse element */}
+      <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-white/10 blur-2xl group-hover:scale-150 transition-transform duration-700" />
+
+      <CardContent className="p-8">
+        <div className="flex items-start justify-between">
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">{title}</p>
+              <h3 className="text-3xl font-black tracking-tighter leading-none">{value}</h3>
+            </div>
+
+            {(subvalue || trend) && (
+              <div className="flex items-center gap-3">
+                {trend && (
+                  <div className={cn(
+                    "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black",
+                    trend.isPositive ? "bg-emerald-500/20 text-emerald-100" : "bg-rose-500/20 text-rose-100"
+                  )}>
+                    {trend.isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {trend.value}
+                  </div>
+                )}
+                {subvalue && <p className="text-[10px] font-bold opacity-60 uppercase">{subvalue}</p>}
+              </div>
+            )}
+          </div>
+
+          <div className="p-3.5 bg-white/20 backdrop-blur-md rounded-2xl shadow-inner group-hover:rotate-12 transition-transform duration-500">
+            <Icon className="h-7 w-7 text-white" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 export default function AccountsPayable() {
   const [isOpen, setIsOpen] = React.useState(false);
+  // ... rest of the state ... (proxying for clarity in the tool call)
   const [editingAccount, setEditingAccount] = React.useState<AccountPayable | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string>("all");
@@ -177,11 +248,14 @@ export default function AccountsPayable() {
   const [dateFilter, setDateFilter] = React.useState<{ start: string; end: string }>(getDefaultDateRange);
   const [paymentDialogOpen, setPaymentDialogOpen] = React.useState(false);
   const [accountToPay, setAccountToPay] = React.useState<AccountPayable | null>(null);
+  const [viewAccountDialogOpen, setViewAccountDialogOpen] = React.useState(false);
+  const [accountToView, setAccountToView] = React.useState<AccountPayable | null>(null);
   const [newSupplierDialogOpen, setNewSupplierDialogOpen] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<"table" | "cards">("table");
   const [selectedAccounts, setSelectedAccounts] = React.useState<string[]>([]);
   const [empresaAtiva, setEmpresaAtiva] = React.useState<any>(null);
   const [showOnlyFilled, setShowOnlyFilled] = React.useState(false);
+  const [supplierFilter, setSupplierFilter] = React.useState<string>("all");
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -512,6 +586,15 @@ export default function AccountsPayable() {
   };
 
   const handleEdit = (account: AccountPayable) => {
+    // Bloquear edição se a conta já está paga
+    if (account.status === "paid") {
+      toast({
+        title: "Ação não permitida",
+        description: "Contas já pagas não podem ser editadas.",
+        variant: "destructive",
+      });
+      return;
+    }
     setEditingAccount(account);
     form.reset({
       description: account.description,
@@ -550,6 +633,18 @@ export default function AccountsPayable() {
     setIsOpen(true);
   };
 
+  const handleView = (account: AccountPayable) => {
+    setAccountToView(account);
+    setViewAccountDialogOpen(true);
+  };
+
+  const handleViewDialogOpenChange = (open: boolean) => {
+    setViewAccountDialogOpen(open);
+    if (!open) {
+      setAccountToView(null);
+    }
+  };
+
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
@@ -580,14 +675,20 @@ export default function AccountsPayable() {
     const matchesStatus = statusFilter === "all" || displayStatus === statusFilter;
     const matchesActive = activeFilter === "all" || (activeFilter === "active" && account.active !== false) || (activeFilter === "inactive" && account.active === false);
 
-    // Date range filter
-    const matchesDateRange = (!dateFilter.start || account.dueDate >= dateFilter.start) &&
-      (!dateFilter.end || account.dueDate <= dateFilter.end);
+    // Date range filter - usa vencimento como referência
+    // Contas vencidas de meses anteriores sempre aparecem até serem pagas
+    const isOverdueFromPreviousMonth = isOverdueAccount && account.status !== "paid";
+    const matchesDateRange = isOverdueFromPreviousMonth ||
+      ((!dateFilter.start || account.dueDate >= dateFilter.start) &&
+        (!dateFilter.end || account.dueDate <= dateFilter.end));
 
     // Company filter
     const matchesCompany = !empresaAtiva || account.companyId === empresaAtiva.id;
 
-    return matchesSearch && matchesStatus && matchesActive && matchesDateRange && matchesCompany;
+    // Supplier filter
+    const matchesSupplier = supplierFilter === "all" || account.supplierId === supplierFilter;
+
+    return matchesSearch && matchesStatus && matchesActive && matchesDateRange && matchesCompany && matchesSupplier;
   }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()) || [];
 
   // Calculate statistics based on filtered accounts
@@ -607,729 +708,474 @@ export default function AccountsPayable() {
   const recurrence = form.watch("recurrence");
 
   return (
-    <div className="space-y-8">
-      {/* Header - Melhorado */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-10 p-2 md:p-6">
+      {/* Header - Modernizado Flux Style */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-2">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">Contas a Pagar</h1>
-          <p className="text-lg text-muted-foreground">
-            Gerenciamento completo de despesas e pagamentos
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-1 bg-gradient-to-b from-primary to-violet-600 rounded-full" />
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter bg-gradient-to-r from-primary via-violet-600 to-indigo-700 bg-clip-text text-transparent">
+              Contas a Pagar
+            </h1>
+          </div>
+          <p className="text-muted-foreground font-medium max-w-2xl px-4 italic">
+            Gestão estratégica de obrigações financeiras e controle de liquidez.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
-            <TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />
-            <span className="text-sm font-medium text-red-600 dark:text-red-400">Gestão de Despesas</span>
+
+        <div className="flex items-center gap-4">
+          <div className="flex -space-x-3 overflow-hidden">
+            {/* Decorative avatars or status indicators could go here */}
           </div>
+
+          <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+            <DialogTrigger asChild>
+              <Button
+                data-testid="button-new-payable"
+                className="h-14 px-8 rounded-2xl bg-gradient-to-r from-primary to-violet-700 hover:scale-105 transition-all shadow-xl shadow-primary/20 font-black tracking-tighter text-lg group"
+              >
+                <Plus className="h-6 w-6 mr-2 group-hover:rotate-90 transition-transform" />
+                Nova Conta
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-6xl max-h-[95vh] flex flex-col rounded-[2.5rem] border-0 shadow-2xl p-0 overflow-hidden">
+              <div className="bg-gradient-to-r from-primary via-violet-600 to-indigo-700 p-8 text-white shrink-0">
+                <DialogHeader>
+                  <DialogTitle className="text-3xl font-black tracking-tighter text-white">
+                    {editingAccount ? "Editar Conta a Pagar" : "Nova Movimentação"}
+                  </DialogTitle>
+                  <DialogDescription className="text-white/80 font-medium">
+                    Preencha os dados necessários para o registro financeiro.
+                  </DialogDescription>
+                </DialogHeader>
+              </div>
+              <div className="p-8 overflow-y-auto flex-1 min-h-0">
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                    {/* Main Information Section */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-900 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Informações Principais
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-blue-900 font-medium">Descrição *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="Ex: Aluguel do escritório"
+                                  {...field}
+                                  data-testid="input-description"
+                                  className="bg-white border-blue-300"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="amount"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-blue-900 font-medium">Valor *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  {...field}
+                                  data-testid="input-amount"
+                                  className="bg-white border-blue-300"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                        <FormField
+                          control={form.control}
+                          name="issueDate"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-blue-900 font-medium">Data de Emissão</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} className="bg-white border-blue-300" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="dueDate"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-blue-900 font-medium">Data de Vencimento *</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} data-testid="input-due-date" className="bg-white border-blue-300" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="invoiceNumber"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-blue-900 font-medium">Nº da Fatura</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="0001/2024"
+                                  {...field}
+                                  className="bg-white border-blue-300"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <FormField
+                          control={form.control}
+                          name="lateFees"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-blue-900 font-medium">Juros / Multa</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  {...field}
+                                  data-testid="input-late-fees"
+                                  className="bg-white border-blue-300"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <FormField
+                          control={form.control}
+                          name="discount"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-blue-900 font-medium">Desconto Previsto</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  {...field}
+                                  className="bg-white border-blue-300"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-900 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                      <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-4 flex items-center gap-2">
+                        <DollarSign className="h-5 w-5" />
+                        Detalhes Financeiros
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="supplierId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-green-900 font-medium">Fornecedor *</FormLabel>
+                              <div className="flex gap-2">
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-supplier" className="bg-white border-green-300 flex-1">
+                                      <SelectValue placeholder="Selecione um fornecedor" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {suppliers?.map((supplier) => (
+                                      <SelectItem key={supplier.id} value={supplier.id}>
+                                        {supplier.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="border-green-300 hover:bg-green-50"
+                                  onClick={() => setNewSupplierDialogOpen(true)}
+                                  title="Cadastrar Novo Fornecedor"
+                                >
+                                  <Plus className="h-4 w-4 text-green-700" />
+                                </Button>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="categoryId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-green-900 font-medium">Categoria *</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-category" className="bg-white border-green-300">
+                                    <SelectValue placeholder="Selecione uma categoria" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {expenseCategories?.map((category) => (
+                                    <SelectItem key={category.id} value={category.id}>
+                                      {category.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="costCenterId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-green-900 font-medium">Centro de Custo *</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-cost-center" className="bg-white border-green-300">
+                                    <SelectValue placeholder="Selecione um centro de custo" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {costCenters?.map((cc) => (
+                                    <SelectItem key={cc.id} value={cc.id}>
+                                      {cc.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-950 dark:to-violet-900 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+                      <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100 mb-4 flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Informações Adicionais
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="paymentMethod"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-purple-900 font-medium">Meio de Pagamento *</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-payment-method" className="bg-white border-purple-300">
+                                    <SelectValue placeholder="Selecione o meio de pagamento" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="boleto">
+                                    <div className="flex items-center gap-2">
+                                      <FileText className="h-4 w-4" />
+                                      Boleto
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="credit_card">
+                                    <div className="flex items-center gap-2">
+                                      <CreditCard className="h-4 w-4" />
+                                      Cartão de Crédito
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="debit_card">
+                                    <div className="flex items-center gap-2">
+                                      <CreditCard className="h-4 w-4" />
+                                      Cartão de Débito
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="cash">
+                                    <div className="flex items-center gap-2">
+                                      <Banknote className="h-4 w-4" />
+                                      Dinheiro
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="transfer">
+                                    <div className="flex items-center gap-2">
+                                      <Wallet className="h-4 w-4" />
+                                      Transferência Bancária
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="pix">
+                                    <div className="flex items-center gap-2">
+                                      <Wallet className="h-4 w-4" />
+                                      PIX
+                                    </div>
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="recurrence"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-purple-900 font-medium">Recorrência</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-recurrence" className="bg-white border-purple-300">
+                                    <SelectValue placeholder="Sem recorrência" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="none">Sem recorrência</SelectItem>
+                                  <SelectItem value="weekly">Semanal</SelectItem>
+                                  <SelectItem value="monthly">Mensal</SelectItem>
+                                  <SelectItem value="yearly">Anual</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        {recurrence && recurrence !== "none" && (
+                          <FormField
+                            control={form.control}
+                            name="recurrenceEnd"
+                            render={({ field }) => (
+                              <FormItem className="animate-in fade-in slide-in-from-top-1 duration-200">
+                                <FormLabel className="text-purple-900 font-medium">Até Quando? *</FormLabel>
+                                <FormControl>
+                                  <Input type="date" {...field} className="bg-white border-purple-300" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name="notes"
+                        render={({ field }) => (
+                          <FormItem className="mt-4">
+                            <FormLabel className="text-purple-900 font-medium">Observações</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="Informações adicionais..."
+                                {...field}
+                                data-testid="input-notes"
+                                className="bg-white border-purple-300 min-h-[100px]"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <DialogFooter className="flex gap-3 pt-8 border-t border-slate-100 mt-8">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleOpenChange(false)}
+                        data-testid="button-cancel"
+                        className="h-12 px-8 rounded-xl font-bold border-slate-200 hover:bg-slate-50 transition-all"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={createMutation.isPending || updateMutation.isPending}
+                        data-testid="button-submit"
+                        className="h-12 px-10 rounded-xl bg-gradient-to-r from-primary to-violet-700 shadow-lg shadow-primary/20 font-black tracking-tighter text-white hover:scale-105 transition-all"
+                      >
+                        {createMutation.isPending || updateMutation.isPending
+                          ? "Processando..."
+                          : editingAccount
+                            ? "Salvar Alterações"
+                            : "Confirmar Lançamento"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      {/* Botão Nova Conta - Flutuante */}
-      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-        <DialogTrigger asChild>
-          <Button data-testid="button-new-payable">
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Conta
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl">
-              {editingAccount ? "Editar Conta a Pagar" : "Nova Conta a Pagar"}
-            </DialogTitle>
-            <DialogDescription>
-              Preencha os dados da conta a pagar. Campos com * são obrigatórios. Use a seção "Informações Avançadas" para maior controle e categorização.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-              {/* Main Information Section */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-900 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Informações Principais
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-blue-900 font-medium">Descrição *</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Ex: Aluguel do escritório"
-                            {...field}
-                            data-testid="input-description"
-                            className="bg-white border-blue-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-blue-900 font-medium">Valor *</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0,00"
-                            {...field}
-                            data-testid="input-amount"
-                            className="bg-white border-blue-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                  <FormField
-                    control={form.control}
-                    name="issueDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-blue-900 font-medium">Data de Emissão</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} className="bg-white border-blue-300" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="dueDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-blue-900 font-medium">Data de Vencimento *</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} data-testid="input-due-date" className="bg-white border-blue-300" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="invoiceNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-blue-900 font-medium">Nº da Fatura</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="0001/2024"
-                            {...field}
-                            className="bg-white border-blue-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <FormField
-                    control={form.control}
-                    name="lateFees"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-blue-900 font-medium">Juros / Multa</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0,00"
-                            {...field}
-                            data-testid="input-late-fees"
-                            className="bg-white border-blue-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <FormField
-                    control={form.control}
-                    name="discount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-blue-900 font-medium">Desconto Previsto</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0,00"
-                            {...field}
-                            className="bg-white border-blue-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-900 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-4 flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Detalhes Financeiros
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="supplierId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-green-900 font-medium">Fornecedor *</FormLabel>
-                        <div className="flex gap-2">
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-supplier" className="bg-white border-green-300 flex-1">
-                                <SelectValue placeholder="Selecione um fornecedor" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {suppliers?.map((supplier) => (
-                                <SelectItem key={supplier.id} value={supplier.id}>
-                                  {supplier.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="border-green-300 hover:bg-green-50"
-                            onClick={() => setNewSupplierDialogOpen(true)}
-                            title="Cadastrar Novo Fornecedor"
-                          >
-                            <Plus className="h-4 w-4 text-green-700" />
-                          </Button>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="categoryId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-green-900 font-medium">Categoria *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-category" className="bg-white border-green-300">
-                              <SelectValue placeholder="Selecione uma categoria" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {expenseCategories?.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
-                                {category.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="costCenterId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-green-900 font-medium">Centro de Custo *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-cost-center" className="bg-white border-green-300">
-                              <SelectValue placeholder="Selecione um centro de custo" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {costCenters?.map((cc) => (
-                              <SelectItem key={cc.id} value={cc.id}>
-                                {cc.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-950 dark:to-violet-900 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-                <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100 mb-4 flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Informações Adicionais
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="paymentMethod"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-purple-900 font-medium">Meio de Pagamento *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-payment-method" className="bg-white border-purple-300">
-                              <SelectValue placeholder="Selecione o meio de pagamento" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="boleto">
-                              <div className="flex items-center gap-2">
-                                <FileText className="h-4 w-4" />
-                                Boleto
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="credit_card">
-                              <div className="flex items-center gap-2">
-                                <CreditCard className="h-4 w-4" />
-                                Cartão de Crédito
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="debit_card">
-                              <div className="flex items-center gap-2">
-                                <CreditCard className="h-4 w-4" />
-                                Cartão de Débito
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="cash">
-                              <div className="flex items-center gap-2">
-                                <Banknote className="h-4 w-4" />
-                                Dinheiro
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="transfer">
-                              <div className="flex items-center gap-2">
-                                <Wallet className="h-4 w-4" />
-                                Transferência Bancária
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="pix">
-                              <div className="flex items-center gap-2">
-                                <Wallet className="h-4 w-4" />
-                                PIX
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="recurrence"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-purple-900 font-medium">Recorrência</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-recurrence" className="bg-white border-purple-300">
-                              <SelectValue placeholder="Sem recorrência" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">Sem recorrência</SelectItem>
-                            <SelectItem value="weekly">Semanal</SelectItem>
-                            <SelectItem value="monthly">Mensal</SelectItem>
-                            <SelectItem value="yearly">Anual</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {recurrence && recurrence !== "none" && (
-                    <FormField
-                      control={form.control}
-                      name="recurrenceEnd"
-                      render={({ field }) => (
-                        <FormItem className="animate-in fade-in slide-in-from-top-1 duration-200">
-                          <FormLabel className="text-purple-900 font-medium">Até Quando? *</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} className="bg-white border-purple-300" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                </div>
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem className="mt-4">
-                      <FormLabel className="text-purple-900 font-medium">Observações</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Informações adicionais..."
-                          {...field}
-                          data-testid="input-notes"
-                          className="bg-white border-purple-300 min-h-[100px]"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Advanced Information Section */}
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-900 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
-                <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-4 flex items-center gap-2">
-                  <Tag className="h-5 w-5" />
-                  Informações Avançadas
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="priority"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Prioridade</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="bg-white border-amber-300">
-                              <SelectValue placeholder="Selecione a prioridade" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="low">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                Baixa
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="medium">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                                Média
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="high">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                Alta
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="urgent">
-                              <div className="flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4 text-red-500" />
-                                Urgente
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="department"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Departamento</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Ex: Administrativo, Produção"
-                            {...field}
-                            className="bg-white border-amber-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="project"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Projeto</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Ex: Expansão 2024"
-                            {...field}
-                            className="bg-white border-amber-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <FormField
-                    control={form.control}
-                    name="invoiceType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Tipo de Fatura</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="bg-white border-amber-300">
-                              <SelectValue placeholder="Selecione o tipo" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="nf">Nota Fiscal</SelectItem>
-                            <SelectItem value="invoice">Fatura</SelectItem>
-                            <SelectItem value="receipt">Recibo</SelectItem>
-                            <SelectItem value="contract">Contrato</SelectItem>
-                            <SelectItem value="other">Outro</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="approvalStatus"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Status de Aprovação</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="bg-white border-amber-300">
-                              <SelectValue placeholder="Selecione o status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="pending">
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4 text-yellow-500" />
-                                Pendente
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="approved">
-                              <div className="flex items-center gap-2">
-                                <CheckCircle className="h-4 w-4 text-green-500" />
-                                Aprovado
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="rejected">
-                              <div className="flex items-center gap-2">
-                                <X className="h-4 w-4 text-red-500" />
-                                Rejeitado
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                  <FormField
-                    control={form.control}
-                    name="taxRate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Alíquota de Imposto (%)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0,00"
-                            {...field}
-                            className="bg-white border-amber-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="taxAmount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Valor do Imposto</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0,00"
-                            {...field}
-                            className="bg-white border-amber-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="netAmount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Valor Líquido</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0,00"
-                            {...field}
-                            className="bg-white border-amber-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <FormField
-                    control={form.control}
-                    name="installments"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Parcelas</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="Ex: 12"
-                            {...field}
-                            className="bg-white border-amber-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="currentInstallment"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Parcela Atual</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="Ex: 1/12"
-                            {...field}
-                            className="bg-white border-amber-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <FormField
-                    control={form.control}
-                    name="approvedBy"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Aprovado por</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Nome do aprovador"
-                            {...field}
-                            className="bg-white border-amber-300"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="attachment"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-amber-900 font-medium">Anexo</FormLabel>
-                        <FormControl>
-                          <div className="flex gap-2">
-                            <Input
-                              placeholder="URL do anexo ou caminho do arquivo"
-                              {...field}
-                              className="bg-white border-amber-300 flex-1"
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="border-amber-300 hover:bg-amber-50"
-                              title="Anexar arquivo"
-                            >
-                              <Paperclip className="h-4 w-4 text-amber-700" />
-                            </Button>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="internalNotes"
-                  render={({ field }) => (
-                    <FormItem className="mt-4">
-                      <FormLabel className="text-amber-900 font-medium">Observações Internas</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Notas internas para equipe..."
-                          {...field}
-                          className="bg-white border-amber-300 min-h-[80px]"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <DialogFooter className="flex gap-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleOpenChange(false)}
-                  data-testid="button-cancel"
-                  className="px-6"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                  data-testid="button-submit"
-                  className="px-6"
-                >
-                  {createMutation.isPending || updateMutation.isPending
-                    ? "Salvando..."
-                    : editingAccount
-                      ? "Atualizar"
-                      : "Cadastrar"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      {/* Cards de Estatísticas - Flux Style */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+        <KPICard
+          title="Total Projetado"
+          value={formatCurrency(stats.total)}
+          subvalue={`${filteredAccounts.length} movimentações`}
+          icon={DollarSign}
+          variant="primary"
+        />
+        <KPICard
+          title="Aguardando"
+          value={formatCurrency(stats.pending)}
+          subvalue={`${stats.pendingCount} títulos`}
+          icon={Clock}
+          variant="warning"
+        />
+        <KPICard
+          title="Liquidados"
+          value={formatCurrency(stats.paid)}
+          subvalue={`${stats.paidCount} pagos`}
+          icon={CheckCircle}
+          variant="success"
+        />
+        <KPICard
+          title="Vencidos"
+          value={formatCurrency(stats.overdue)}
+          subvalue={`${stats.overdueCount} atrasados`}
+          icon={AlertTriangle}
+          variant="danger"
+        />
+        <KPICard
+          title="Encargos"
+          value={formatCurrency(stats.totalLateFees)}
+          subvalue="Juros e multas"
+          icon={Percent}
+          variant="secondary"
+        />
+        <KPICard
+          title="Economia"
+          value={formatCurrency(stats.totalDiscount)}
+          subvalue="Descontos obtidos"
+          icon={TrendingDown}
+          variant="info"
+        />
+      </div>
       {/* New Supplier Dialog */}
       <Dialog open={newSupplierDialogOpen} onOpenChange={setNewSupplierDialogOpen}>
         <DialogContent>
@@ -1528,306 +1374,299 @@ export default function AccountsPayable() {
         </DialogContent>
       </Dialog>
 
-      {/* Cards de Estatísticas - Layout Dinâmico */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-        <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-blue-200 dark:border-blue-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                    <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+      {/* View Account Dialog */}
+      <Dialog open={viewAccountDialogOpen} onOpenChange={handleViewDialogOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              Detalhes da Conta
+            </DialogTitle>
+            <DialogDescription>
+              Visualize todas as informações da conta a pagar
+            </DialogDescription>
+          </DialogHeader>
+          {accountToView && (
+            <div className="space-y-6">
+              {/* Status Badge */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">{accountToView.description}</h2>
+                <Badge className={`${getStatusColor(isOverdue(accountToView.dueDate, accountToView.status) ? "overdue" : accountToView.status)} px-3 py-1`}>
+                  <div className="flex items-center gap-2">
+                    {accountToView.status === "paid" && <CheckCircle className="h-3 w-3" />}
+                    {accountToView.status === "pending" && !isOverdue(accountToView.dueDate, accountToView.status) && <Clock className="h-3 w-3" />}
+                    {(isOverdue(accountToView.dueDate, accountToView.status) || accountToView.status === "overdue") && <AlertTriangle className="h-3 w-3" />}
+                    <span className="font-medium">{getStatusLabel(isOverdue(accountToView.dueDate, accountToView.status) ? "overdue" : accountToView.status)}</span>
                   </div>
-                  <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">Total</p>
-                </div>
-                <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                  {formatCurrency(stats.total)}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-                  <FileText className="h-3 w-3" />
-                  <span>{filteredAccounts.length} contas</span>
-                </div>
+                </Badge>
               </div>
-              <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full group-hover:scale-110 transition-transform">
-                <DollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950 dark:to-amber-950 border-orange-200 dark:border-orange-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
-                    <Clock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              {/* Informações Principais */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-900 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Informações Principais
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Valor</p>
+                    <p className="text-lg font-bold text-red-600">-{formatCurrency(accountToView.amount)}</p>
                   </div>
-                  <p className="text-sm font-semibold text-orange-600 dark:text-orange-400">Pendentes</p>
-                </div>
-                <div className="text-3xl font-bold text-orange-900 dark:text-orange-100">
-                  {formatCurrency(stats.pending)}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
-                  <AlertCircle className="h-3 w-3" />
-                  <span>{stats.pendingCount} contas</span>
-                </div>
-              </div>
-              <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-full group-hover:scale-110 transition-transform">
-                <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 border-green-200 dark:border-green-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
-                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Data de Vencimento</p>
+                    <p className="text-sm font-medium flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {formatDate(accountToView.dueDate)}
+                    </p>
                   </div>
-                  <p className="text-sm font-semibold text-green-600 dark:text-green-400">Pagos</p>
-                </div>
-                <div className="text-3xl font-bold text-green-900 dark:text-green-100">
-                  {formatCurrency(stats.paid)}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>{stats.paidCount} contas</span>
-                </div>
-              </div>
-              <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full group-hover:scale-110 transition-transform">
-                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950 dark:to-rose-950 border-red-200 dark:border-red-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
-                    <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  </div>
-                  <p className="text-sm font-semibold text-red-600 dark:text-red-400">Vencidos</p>
-                </div>
-                <div className="text-3xl font-bold text-red-900 dark:text-red-100">
-                  {formatCurrency(stats.overdue)}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                  <AlertCircle className="h-3 w-3" />
-                  <span>{stats.overdueCount} contas</span>
-                </div>
-              </div>
-              <div className="p-3 bg-red-100 dark:bg-red-900 rounded-full group-hover:scale-110 transition-transform">
-                <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950 dark:to-violet-950 border-purple-200 dark:border-purple-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
-                    <Percent className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <p className="text-sm font-semibold text-purple-600 dark:text-purple-400">Juros/Multa</p>
-                </div>
-                <div className="text-3xl font-bold text-purple-900 dark:text-purple-100">
-                  {formatCurrency(stats.totalLateFees)}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>Acréscimos totais</span>
-                </div>
-              </div>
-              <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-full group-hover:scale-110 transition-transform">
-                <Percent className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950 dark:to-cyan-950 border-teal-200 dark:border-teal-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-teal-100 dark:bg-teal-900 rounded-lg">
-                    <TrendingDown className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                  </div>
-                  <p className="text-sm font-semibold text-teal-600 dark:text-teal-400">Descontos</p>
-                </div>
-                <div className="text-3xl font-bold text-teal-900 dark:text-teal-100">
-                  {formatCurrency(stats.totalDiscount)}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-teal-600 dark:text-teal-400">
-                  <TrendingDown className="h-3 w-3" />
-                  <span>Economia total</span>
-                </div>
-              </div>
-              <div className="p-3 bg-teal-100 dark:bg-teal-900 rounded-full group-hover:scale-110 transition-transform">
-                <TrendingDown className="h-6 w-6 text-teal-600 dark:text-teal-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabela Principal - Layout Melhorado */}
-      <Card className="shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-950 dark:to-gray-950">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            <div className="space-y-1">
-              <h2 className="text-2xl font-bold">Lista de Contas</h2>
-              <p className="text-sm text-muted-foreground">Gerencie todas as suas contas a pagar</p>
-            </div>
-            <div className="flex gap-2">
-              {selectedAccounts.length > 0 && (
-                <Button
-                  onClick={handleBulkPay}
-                  className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Pagar Selecionados ({selectedAccounts.length})
-                </Button>
-              )}
-              <Button
-                onClick={() => {
-                  setEditingAccount(null);
-                  form.reset();
-                  setIsOpen(true);
-                }}
-                className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 shadow-lg"
-                data-testid="button-new-account"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Nova Conta
-              </Button>
-            </div>
-          </div>
-
-          {/* Filtros - Layout Compacto */}
-          <div className="bg-white dark:bg-card p-4 rounded-lg shadow-sm border border-gray-200 dark:border-border mt-4">
-            <div className="flex flex-col xl:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Buscar contas..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 h-10"
-                    data-testid="input-search"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Select value={activeFilter} onValueChange={setActiveFilter}>
-                  <SelectTrigger className="w-full sm:w-[140px] h-10">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Ativas</SelectItem>
-                    <SelectItem value="inactive">Inativas</SelectItem>
-                    <SelectItem value="all">Todas</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-[140px] h-10">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="pending">Pendentes</SelectItem>
-                    <SelectItem value="paid">Pagos</SelectItem>
-                    <SelectItem value="overdue">Vencidos</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={dateFilter.start}
-                  onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
-                  className="w-[140px] h-10"
-                  placeholder="Início"
-                />
-                <span className="text-sm text-muted-foreground">até</span>
-                <Input
-                  type="date"
-                  value={dateFilter.end}
-                  onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
-                  className="w-[140px] h-10"
-                  placeholder="Fim"
-                />
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1 p-1 bg-muted rounded-lg">
-                    <Button
-                      variant={viewMode === "table" ? "default" : "ghost"}
-                      size="sm"
-                      onClick={() => setViewMode("table")}
-                      className="h-8 w-8 p-0"
-                      title="Modo Tabela"
-                    >
-                      <List className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant={viewMode === "cards" ? "default" : "ghost"}
-                      size="sm"
-                      onClick={() => setViewMode("cards")}
-                      className="h-8 w-8 p-0"
-                      title="Modo Cards"
-                    >
-                      <Grid3X3 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2 px-3 border-l ml-2">
-                    <Switch
-                      id="filled-mode"
-                      checked={showOnlyFilled}
-                      onCheckedChange={setShowOnlyFilled}
-                    />
-                    <Label htmlFor="filled-mode" className="text-xs cursor-pointer whitespace-nowrap">
-                      Apenas Preenchidos
-                    </Label>
-                  </div>
-                  {(searchTerm || statusFilter !== "all" || activeFilter !== "active" || dateFilter.start !== getDefaultDateRange().start || dateFilter.end !== getDefaultDateRange().end) && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSearchTerm("");
-                        setStatusFilter("all");
-                        setActiveFilter("active");
-                        setDateFilter(getDefaultDateRange());
-                      }}
-                      title="Limpar filtros"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                  {accountToView?.paymentDate && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Data de Pagamento</p>
+                      <p className="text-sm font-medium text-green-600 flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        {formatDate(accountToView?.paymentDate)}
+                      </p>
+                    </div>
+                  )}
+                  {accountToView?.originalDueDate && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Data Original de Vencimento</p>
+                      <p className="text-sm font-medium text-amber-600 flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(accountToView?.originalDueDate)}
+                      </p>
+                    </div>
+                  )}
+                  {accountToView?.invoiceNumber && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Nº da Fatura</p>
+                      <p className="text-sm font-medium">{accountToView?.invoiceNumber}</p>
+                    </div>
                   )}
                 </div>
               </div>
+
+              {/* Detalhes Financeiros */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-900 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                <h3 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-3 flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Detalhes Financeiros
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Fornecedor:</span>
+                    <span className="text-sm font-medium">{suppliers?.find(s => s.id === accountToView.supplierId)?.name || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Categoria:</span>
+                    <span className="text-sm font-medium">{categories?.find(c => c.id === accountToView.categoryId)?.name || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Centro de Custo:</span>
+                    <span className="text-sm font-medium">{costCenters?.find(cc => cc.id === accountToView.costCenterId)?.name || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Meio de Pagamento:</span>
+                    <span className="text-sm font-medium capitalize">{accountToView.paymentMethod || "-"}</span>
+                  </div>
+                  {(accountToView.lateFees && parseFloat(accountToView.lateFees) > 0) && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Juros/Multa:</span>
+                      <span className="text-sm font-medium text-orange-600">+{formatCurrency(accountToView.lateFees)}</span>
+                    </div>
+                  )}
+                  {(accountToView.discount && parseFloat(accountToView.discount) > 0) && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Desconto:</span>
+                      <span className="text-sm font-medium text-green-600">-{formatCurrency(accountToView.discount)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Observações */}
+              {accountToView.notes && (
+                <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-800">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Observações
+                  </h3>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{accountToView.notes}</p>
+                </div>
+              )}
+
+              <DialogFooter className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleViewDialogOpenChange(false)}
+                  className="px-6"
+                >
+                  Fechar
+                </Button>
+                {accountToView.status !== "paid" && (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      handleViewDialogOpenChange(false);
+                      handleMarkAsPaid(accountToView);
+                    }}
+                    className="px-6 bg-green-600 hover:bg-green-700"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Marcar como Pago
+                  </Button>
+                )}
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tabela Principal - Flux Dashboard Layout */}
+      <Card className="border-0 shadow-2xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl">
+        <CardHeader className="p-8 bg-gradient-to-r from-slate-50 to-white dark:from-slate-950 dark:to-background border-b border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+            <div className="space-y-1">
+              <h2 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">
+                Movimentações
+              </h2>
+              <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest opacity-60">
+                Detalhamento analítico de saídas
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-4 w-full lg:w-auto">
+              {selectedAccounts.length > 0 && (
+                <Button
+                  onClick={handleBulkPay}
+                  className="h-12 px-6 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 font-black tracking-tighter animate-in zoom-in-95 duration-200"
+                >
+                  <CheckCircle className="h-5 w-5 mr-2" />
+                  Liquidar Selecionados ({selectedAccounts.length})
+                </Button>
+              )}
+
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                <Button
+                  variant={viewMode === "table" ? "secondary" : "ghost"}
+                  size="icon"
+                  onClick={() => setViewMode("table")}
+                  className={cn("rounded-lg", viewMode === "table" && "shadow-sm bg-white")}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "cards" ? "secondary" : "ghost"}
+                  size="icon"
+                  onClick={() => setViewMode("cards")}
+                  className={cn("rounded-lg", viewMode === "cards" && "shadow-sm bg-white")}
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2 px-3 border-l">
+                <Switch
+                  id="filled-mode"
+                  checked={showOnlyFilled}
+                  onCheckedChange={setShowOnlyFilled}
+                />
+                <Label htmlFor="filled-mode" className="text-xs font-bold whitespace-nowrap opacity-60">
+                  PREENCHIDOS
+                </Label>
+              </div>
             </div>
           </div>
+
+          {/* Filtros Premium */}
+          <div className="mt-8 flex flex-row flex-nowrap gap-4 items-center w-full overflow-x-auto pb-4 scroll-smooth scrollbar-hide">
+            <div className="relative group min-w-[300px] shrink-0">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5 group-focus-within:text-primary transition-colors" />
+              <Input
+                placeholder="Buscar por descrição, fornecedor ou valor..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-12 h-14 bg-white/50 border-slate-200 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all text-base font-medium shadow-sm w-full"
+              />
+            </div>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-14 min-w-[150px] bg-white/50 border-slate-200 rounded-2xl shadow-sm font-bold">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                <SelectItem value="all" className="font-bold">Todos Status</SelectItem>
+                <SelectItem value="pending" className="text-amber-600 font-bold">Pendentes</SelectItem>
+                <SelectItem value="overdue" className="text-rose-600 font-bold">Vencidos</SelectItem>
+                <SelectItem value="paid" className="text-emerald-600 font-bold">Pagos</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={activeFilter} onValueChange={setActiveFilter}>
+              <SelectTrigger className="h-14 min-w-[130px] bg-white/50 border-slate-200 rounded-2xl shadow-sm font-bold">
+                <SelectValue placeholder="Visibilidade" />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                <SelectItem value="active" className="font-bold">Ativas</SelectItem>
+                <SelectItem value="inactive" className="font-bold">Inativas</SelectItem>
+                <SelectItem value="all" className="font-bold">Todas</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+              <SelectTrigger className="h-14 min-w-[180px] flex-1 bg-white/50 border-slate-200 rounded-2xl shadow-sm font-bold">
+                <SelectValue placeholder="Fornecedor" />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl border-slate-100 shadow-2xl max-h-[300px]">
+                <SelectItem value="all" className="font-bold">Todos Fornecedores</SelectItem>
+                {suppliers?.sort((a, b) => a.name.localeCompare(b.name)).map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center gap-2 bg-white/50 border border-slate-200 rounded-2xl px-4 shadow-sm">
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+              <Input
+                type="date"
+                value={dateFilter.start}
+                onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
+                className="border-0 bg-transparent h-12 w-32 focus-visible:ring-0 p-0 font-bold text-xs"
+              />
+              <span className="text-slate-300 font-black">→</span>
+              <Input
+                type="date"
+                value={dateFilter.end}
+                onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
+                className="border-0 bg-transparent h-12 w-32 focus-visible:ring-0 p-0 font-bold text-xs"
+              />
+            </div>
+
+            {(searchTerm || statusFilter !== "all" || activeFilter !== "active" || supplierFilter !== "all" || dateFilter.start !== getDefaultDateRange().start || dateFilter.end !== getDefaultDateRange().end) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-14 w-14 rounded-2xl hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                onClick={() => {
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                  setActiveFilter("active");
+                  setSupplierFilter("all");
+                  setDateFilter(getDefaultDateRange());
+                }}
+                title="Limpar filtros"
+              >
+                <X className="h-6 w-6" />
+              </Button>
+            )}
+          </div>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="p-0">
           {isLoading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="p-4 border rounded-lg">
-                  <Skeleton className="h-6 w-32 mb-2" />
-                  <Skeleton className="h-4 w-full mb-1" />
-                  <Skeleton className="h-4 w-3/4" />
-                </div>
+            <div className="p-8 space-y-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-2xl" />
               ))}
             </div>
           ) : filteredAccounts && filteredAccounts.length > 0 ? (
@@ -1904,9 +1743,18 @@ export default function AccountsPayable() {
                               )}
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm">{formatDate(account.dueDate)}</span>
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm">{formatDate(account.dueDate)}</span>
+                                </div>
+                                {account.originalDueDate && (
+                                  <div className="flex items-center gap-1 text-xs">
+                                    <span className="text-amber-600 font-medium">
+                                      Original: {formatDate(account.originalDueDate)}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-bold text-red-600 dark:text-red-400">
@@ -1961,6 +1809,10 @@ export default function AccountsPayable() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleView(account)}>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    Visualizar
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => handleEdit(account)}>
                                     <Edit className="h-4 w-4 mr-2" />
                                     Editar
@@ -2033,6 +1885,10 @@ export default function AccountsPayable() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleView(account)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Visualizar
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleEdit(account)}>
                                   <Edit className="h-4 w-4 mr-2" />
                                   Editar
@@ -2066,9 +1922,17 @@ export default function AccountsPayable() {
                           </h3>
 
                           <div className="space-y-2 mb-3">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">Vencimento:</span>
-                              <span className="text-sm font-medium">{formatDate(account.dueDate)}</span>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Vencimento:</span>
+                                <span className="text-sm font-medium">{formatDate(account.dueDate)}</span>
+                              </div>
+                              {account.originalDueDate && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-amber-600 font-medium">Original:</span>
+                                  <span className="text-xs text-amber-600 font-medium">{formatDate(account.originalDueDate)}</span>
+                                </div>
+                              )}
                             </div>
 
                             {/* Detalhes que aparecem apenas se houver dados ou se "showOnlyFilled" estiver desativado */}
@@ -2150,7 +2014,7 @@ export default function AccountsPayable() {
             </div>
           )}
         </CardContent>
-      </Card>
-    </div>
+      </Card >
+    </div >
   );
 }

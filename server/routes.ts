@@ -9,8 +9,24 @@ import { scrypt, randomBytes, randomUUID } from "crypto";
 import { promisify } from "util";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import { createClient } from '@supabase/supabase-js';
 
 const scryptAsync = promisify(scrypt);
+
+// Initialize Supabase Admin client for user management
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAdmin = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  })
+  : null;
+
+if (!supabaseAdmin) {
+  console.warn('⚠️ [Routes] Supabase Admin client not initialized - users will not be synced to Supabase Auth');
+} else {
+  console.log('✅ [Routes] Supabase Admin client initialized for user sync');
+}
 
 export function registerRoutes(
   httpServer: Server | null,
@@ -47,7 +63,7 @@ export function registerRoutes(
 
   app.post("/api/auth/login", (req, res, next) => {
     console.log(`[Login API] Starting login for: ${req.body?.email}`);
-    passport.authenticate("local", (err: any, user: any, info: any) => {
+    passport.authenticate("local", async (err: any, user: any, info: any) => {
       try {
         if (err) {
           console.error("[Login API] Passport error:", err);
@@ -58,6 +74,41 @@ export function registerRoutes(
           return res.status(401).json({ error: "E-mail ou senha inválidos" });
         }
 
+        // Sync user to Supabase Auth if not already there
+        if (supabaseAdmin && req.body?.email) {
+          try {
+            const { data: supabaseUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
+            if (!supabaseUser?.user) {
+              console.log(`[Login API] User ${user.id} not found in Supabase Auth, syncing...`);
+              const { data: newSupaUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+                email: req.body.email,
+                password: req.body.password,
+                email_confirm: true,
+                user_metadata: {
+                  full_name: user.fullName,
+                  username: user.username,
+                },
+              });
+              if (createErr) {
+                // If user already exists by email, that's OK
+                if (!createErr.message?.includes('already')) {
+                  console.warn(`[Login API] Supabase sync warning:`, createErr.message);
+                }
+              } else {
+                console.log(`[Login API] User synced to Supabase Auth: ${newSupaUser?.user?.id}`);
+                // Update local DB user ID to match Supabase ID if different
+                if (newSupaUser?.user?.id && newSupaUser.user.id !== user.id) {
+                  console.log(`[Login API] Updating local user ID from ${user.id} to ${newSupaUser.user.id}`);
+                  // Note: updating user ID is complex; just log for now
+                }
+              }
+            } else {
+              console.log(`[Login API] User ${user.id} already exists in Supabase Auth ✓`);
+            }
+          } catch (syncErr: any) {
+            console.warn(`[Login API] Supabase sync error (non-blocking):`, syncErr.message);
+          }
+        }
 
         console.log(`[Login API] Passport authenticated ${user.username}, calling req.logIn`);
         req.logIn(user, (err) => {
@@ -106,14 +157,62 @@ export function registerRoutes(
         return res.status(400).json({ error: "Nome de usuário já existe" });
       }
 
-      // Hash password and create user
+      // Also check by email
+      const existingByEmail = await storage.getUserByEmail(email);
+      if (existingByEmail) {
+        console.log(`[Register API] Email already exists: ${email}`);
+        return res.status(400).json({ error: "Este email já está cadastrado" });
+      }
+
+      // Step 1: Create user in Supabase Auth first
+      let supabaseUserId: string | null = null;
+      if (supabaseAdmin) {
+        try {
+          console.log(`[Register API] Creating user in Supabase Auth: ${email}`);
+          const { data: supabaseUser, error: supabaseError } = await supabaseAdmin.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true, // Auto-confirm email
+            user_metadata: {
+              full_name: fullName,
+              username: username,
+            },
+          });
+
+          if (supabaseError) {
+            // If user already exists in Supabase, try to get their ID
+            if (supabaseError.message?.includes('already been registered') || supabaseError.message?.includes('already exists')) {
+              console.log(`[Register API] User already exists in Supabase Auth, fetching ID...`);
+              const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+              const existingSupaUser = listData?.users?.find(u => u.email === email);
+              if (existingSupaUser) {
+                supabaseUserId = existingSupaUser.id;
+                console.log(`[Register API] Found existing Supabase user: ${supabaseUserId}`);
+              }
+            } else {
+              console.error(`[Register API] Supabase Auth error:`, supabaseError);
+              // Continue with local-only registration if Supabase fails
+            }
+          } else if (supabaseUser?.user) {
+            supabaseUserId = supabaseUser.user.id;
+            console.log(`[Register API] Supabase Auth user created: ${supabaseUserId}`);
+          }
+        } catch (supabaseErr: any) {
+          console.error(`[Register API] Supabase Auth exception:`, supabaseErr);
+          // Continue with local-only registration if Supabase fails
+        }
+      } else {
+        console.warn(`[Register API] Supabase Admin not configured, skipping Supabase Auth registration`);
+      }
+
+      // Step 2: Hash password and create user in local database
       console.log(`[Register API] Hashing password...`);
       const salt = randomBytes(16).toString("hex");
       const buf = (await scryptAsync(password, salt, 64)) as Buffer;
       const hashedPassword = `${buf.toString("hex")}.${salt}`;
 
-      // Generate UUID in JS to avoid dependency on gen_random_uuid() extension
-      const userId = randomUUID();
+      // Use Supabase user ID if available, otherwise generate our own
+      const userId = supabaseUserId || randomUUID();
 
       console.log(`[Register API] Creating user in storage with ID: ${userId}`);
       const newUser = await storage.createUser({
@@ -200,6 +299,71 @@ export function registerRoutes(
     }
     await storage.deleteUser(req.params.id);
     res.status(204).send();
+  });
+
+  // Sync all existing database users to Supabase Auth
+  app.post("/api/users/sync-supabase", requireAdmin, async (req, res) => {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "Supabase Admin não configurado" });
+    }
+
+    try {
+      const allUsers = await storage.getUsers();
+      const results: { synced: string[], alreadyExists: string[], errors: string[] } = {
+        synced: [],
+        alreadyExists: [],
+        errors: [],
+      };
+
+      for (const user of allUsers) {
+        if (!user.email) {
+          results.errors.push(`${user.username}: sem email cadastrado`);
+          continue;
+        }
+
+        try {
+          // Check if user already exists in Supabase Auth
+          const { data: existingUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
+          if (existingUser?.user) {
+            results.alreadyExists.push(user.email);
+            continue;
+          }
+
+          // Create user in Supabase Auth with a temporary password
+          const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+            email: user.email,
+            email_confirm: true,
+            user_metadata: {
+              full_name: user.fullName,
+              username: user.username,
+            },
+          });
+
+          if (createError) {
+            if (createError.message?.includes('already')) {
+              results.alreadyExists.push(user.email);
+            } else {
+              results.errors.push(`${user.email}: ${createError.message}`);
+            }
+          } else {
+            results.synced.push(user.email);
+            console.log(`[Sync] User synced to Supabase: ${user.email} -> ${newUser?.user?.id}`);
+          }
+        } catch (err: any) {
+          results.errors.push(`${user.email}: ${err.message}`);
+        }
+      }
+
+      console.log(`[Sync] Results: ${results.synced.length} synced, ${results.alreadyExists.length} already exist, ${results.errors.length} errors`);
+      res.json({
+        message: "Sincronização concluída",
+        total: allUsers.length,
+        ...results,
+      });
+    } catch (error: any) {
+      console.error("[Sync] Error:", error);
+      res.status(500).json({ error: "Erro ao sincronizar usuários", details: error.message });
+    }
   });
 
   // Companies (Empresas) routes
@@ -330,6 +494,12 @@ export function registerRoutes(
 
   app.patch("/api/suppliers/:id/deactivate", requireFinancial, async (req, res) => {
     const supplier = await storage.deactivateSupplier(req.params.id);
+    if (!supplier) return res.status(404).json({ error: "Not found" });
+    res.json(supplier);
+  });
+
+  app.patch("/api/suppliers/:id/activate", requireFinancial, async (req, res) => {
+    const supplier = await storage.activateSupplier(req.params.id);
     if (!supplier) return res.status(404).json({ error: "Not found" });
     res.json(supplier);
   });
@@ -690,6 +860,7 @@ export function registerRoutes(
     else if (typeof companyId === 'string' && companyId.includes(',')) { const parts = companyId.split(','); companyId = parts.includes('all') ? 'all' : parts[0]; }
 
     console.log(`[DEBUG] /api/cash-flow - companyId: ${companyId}, period: ${period}, startDate: ${startDate}, endDate: ${endDate}`);
+    console.log(`[DEBUG] Data de hoje: ${new Date().toISOString().split('T')[0]}`);
 
     let data;
     if (startDate && endDate) {
@@ -698,6 +869,10 @@ export function registerRoutes(
       data = await storage.getCashFlowData(period, companyId);
     }
     console.log(`[DEBUG] /api/cash-flow - returning ${data.length} items`);
+    if (data.length > 0) {
+      console.log(`[DEBUG] Primeiro item:`, data[0]);
+      console.log(`[DEBUG] Último item:`, data[data.length - 1]);
+    }
     res.json(data);
   });
 
@@ -898,6 +1073,104 @@ export function registerRoutes(
       message: `Report ${type} requested in ${format} format for ${month}/${year}`,
       note: "PDF/Excel generation requires additional libraries",
     });
+  });
+
+  // Retail Sales Routes (Vendas de Varejo)
+  app.get("/api/retail-sales", requireViewer, async (req, res) => {
+    try {
+      let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+      if (Array.isArray(companyId)) { companyId = companyId.includes('all') ? 'all' : companyId[0]; }
+      else if (typeof companyId === 'string' && companyId.includes(',')) { const parts = companyId.split(','); companyId = parts.includes('all') ? 'all' : parts[0]; }
+
+      const sales = await storage.getRetailSales(companyId);
+      res.json(sales);
+    } catch (error: any) {
+      console.error("Error fetching retail sales:", error);
+      res.status(500).json({ error: "Erro ao buscar vendas", details: error.message });
+    }
+  });
+
+  app.post("/api/retail-sales", requireFinancial, async (req, res) => {
+    console.log("[DEBUG] POST /api/retail-sales recebido:", req.body);
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "Usuário não autenticado" });
+      }
+
+      const companyId = req.headers['x-company-id'] as string;
+      const type = req.body.type || 'income';
+
+      // Create the retail sale
+      const sale = await storage.createRetailSale({
+        ...req.body,
+        userId,
+        companyId
+      });
+
+      // Automatically create cash flow entry for this sale
+      console.log(`[DEBUG] Creating cash flow entry for sale:`, {
+        date: sale.date,
+        description: `${type === 'income' ? 'Venda' : 'Despesa'}: ${sale.description}`,
+        type: type,
+        amount: parseFloat(sale.amount.toString()),
+        companyId
+      });
+
+      const cashFlowEntry = await storage.createCashFlowEntry({
+        date: sale.date,
+        description: `${type === 'income' ? 'Venda' : 'Despesa'}: ${sale.description}`,
+        type: type, // 'income' or 'expense'
+        movementType: 'normal',
+        amount: parseFloat(sale.amount.toString()).toString(),
+        paymentMethod: sale.paymentMethod,
+        account: sale.account,
+        categoryId: sale.categoryId,
+        status: 'confirmed',
+        document: sale.document,
+        costCenter: sale.costCenter,
+        userId,
+        companyId,
+      });
+
+      console.log(`[DEBUG] Cash flow entry created:`, cashFlowEntry);
+
+      // Update the sale with the cash flow entry reference
+      await storage.updateRetailSale(sale.id, { cashFlowEntryId: cashFlowEntry.id });
+
+      res.status(201).json({ ...sale, cashFlowEntryId: cashFlowEntry.id });
+    } catch (error: any) {
+      console.error("Error creating retail sale:", error);
+      res.status(400).json({ error: "Erro ao registrar movimentação", details: error.message });
+    }
+  });
+
+  app.patch("/api/retail-sales/:id", requireFinancial, async (req, res) => {
+    try {
+      const sale = await storage.updateRetailSale(req.params.id, req.body);
+      if (!sale) return res.status(404).json({ error: "Venda não encontrada" });
+      res.json(sale);
+    } catch (error: any) {
+      console.error("Error updating retail sale:", error);
+      res.status(400).json({ error: "Erro ao atualizar venda", details: error.message });
+    }
+  });
+
+  app.delete("/api/retail-sales/:id", requireFinancial, async (req, res) => {
+    try {
+      // Get the sale first to find the associated cash flow entry
+      const sale = await storage.getRetailSale(req.params.id);
+      if (sale && sale.cashFlowEntryId) {
+        // Delete the associated cash flow entry
+        await storage.deleteCashFlowEntry(sale.cashFlowEntryId);
+      }
+
+      await storage.deleteRetailSale(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting retail sale:", error);
+      res.status(500).json({ error: "Erro ao excluir venda", details: error.message });
+    }
   });
 
   return httpServer;

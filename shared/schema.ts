@@ -98,6 +98,7 @@ export const accountsPayable = pgTable("accounts_payable", {
   description: text("description").notNull(),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   dueDate: text("due_date").notNull(),
+  originalDueDate: text("original_due_date"), // Guarda a data original quando o pagamento ocorre em data diferente
   paymentDate: text("payment_date"),
   status: text("status").notNull().default("pending"), // 'pending' | 'paid' | 'overdue'
   supplierId: varchar("supplier_id"),
@@ -124,6 +125,7 @@ export const accountsReceivable = pgTable("accounts_receivable", {
   description: text("description").notNull(),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   dueDate: text("due_date").notNull(),
+  originalDueDate: text("original_due_date"), // Guarda a data original quando o recebimento ocorre em data diferente
   receivedDate: text("received_date"),
   status: text("status").notNull().default("pending"), // 'pending' | 'received' | 'overdue'
   clientId: varchar("client_id"),
@@ -440,6 +442,34 @@ export const paymentConfigs = pgTable("payment_configs", {
 export const insertPaymentConfigSchema = createInsertSchema(paymentConfigs).omit({ id: true });
 export type InsertPaymentConfig = z.infer<typeof insertPaymentConfigSchema>;
 export type PaymentConfig = typeof paymentConfigs.$inferSelect;
+
+// Retail Sales (Vendas de Varejo)
+export const retailSales = pgTable("retail_sales", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: date("date").notNull(), // Data da venda
+  type: text("type").notNull().default("income"), // 'income' | 'expense'
+  description: text("description").notNull(), // Descrição/Produto vendido
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Valor da venda
+  quantity: integer("quantity").default(1), // Quantidade vendida
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }), // Preço unitário
+  paymentMethod: text("payment_method").notNull(), // 'money', 'pix', 'credit_card', 'debit_card', 'transfer', 'other'
+  account: text("account").notNull(), // Conta/Caixa onde entrou o dinheiro
+  categoryId: varchar("category_id").references(() => categories.id), // Categoria da venda
+  clientName: text("client_name"), // Nome do cliente (opcional)
+  document: text("document"), // NF ou Cupom Fiscal
+  costCenter: text("cost_center"), // Loja/PDV
+  notes: text("notes"), // Observações
+  status: text("status").notNull().default("confirmed"), // 'confirmed' | 'cancelled'
+  cashFlowEntryId: varchar("cash_flow_entry_id"), // Referência ao lançamento no fluxo de caixa
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  userId: varchar("user_id").references(() => users.id),
+  companyId: varchar("company_id").references(() => companies.id),
+  active: boolean("active").notNull().default(true),
+});
+
+export const insertRetailSaleSchema = createInsertSchema(retailSales).omit({ id: true, createdAt: true });
+export type InsertRetailSale = z.infer<typeof insertRetailSaleSchema>;
+export type RetailSale = typeof retailSales.$inferSelect;
 
 export interface FinancialGoalProgress extends FinancialGoal {
   currentAmount: number;

@@ -5,7 +5,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["pg", "pg-hstore", "pg-native", "vite", "@babel/preset-typescript", "lightningcss", "esbuild"]
+  external_node_modules = ["pg", "pg-hstore", "pg-native", "vite", "@babel/preset-typescript", "lightningcss", "esbuild", "connect-pg-simple"]
 
 [[redirects]]
   from = "/api/*"

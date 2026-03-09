@@ -5,7 +5,7 @@ console.log("[Storage] Module loading started...");
 import {
   users, suppliers, clients, categories, costCenters,
   accountsPayable, accountsReceivable, mercadoPagoTransactions, cashFlowEntries, balanceAdjustments, notes,
-  financialGoals, companies, cardTransactions, bankAccounts, paymentConfigs,
+  financialGoals, companies, cardTransactions, bankAccounts, paymentConfigs, retailSales,
 } from "@shared/schema";
 import type {
   User, InsertUser,
@@ -19,6 +19,7 @@ import type {
   CardTransaction, InsertCardTransaction,
   BankAccount, InsertBankAccount,
   PaymentConfig, InsertPaymentConfig,
+  RetailSale, InsertRetailSale,
   DashboardStats, CashFlowData, DREData, CategoryExpense,
   CashFlowEntry, InsertCashFlowEntry, CashFlowKPIs, CashFlowAlert, DailyMovement,
   BalanceAdjustment, InsertBalanceAdjustment,
@@ -42,6 +43,7 @@ export interface IStorage {
   createSupplier(supplier: InsertSupplier): Promise<Supplier>;
   updateSupplier(id: string, supplier: Partial<InsertSupplier>): Promise<Supplier | undefined>;
   deactivateSupplier(id: string): Promise<Supplier | undefined>;
+  activateSupplier(id: string): Promise<Supplier | undefined>;
 
   getClients(): Promise<Client[]>;
   getClient(id: string): Promise<Client | undefined>;
@@ -412,6 +414,14 @@ export class DatabaseStorage implements IStorage {
     return deactivated;
   }
 
+  async activateSupplier(id: string): Promise<Supplier | undefined> {
+    const [activated] = await db.update(suppliers)
+      .set({ active: true })
+      .where(eq(suppliers.id, id))
+      .returning();
+    return activated;
+  }
+
   async getClients(): Promise<Client[]> {
     return db.select().from(clients);
   }
@@ -634,6 +644,7 @@ export class DatabaseStorage implements IStorage {
       description: accountsPayable.description,
       amount: accountsPayable.amount,
       dueDate: accountsPayable.dueDate,
+      originalDueDate: accountsPayable.originalDueDate,
       paymentDate: accountsPayable.paymentDate,
       status: accountsPayable.status,
       supplierId: accountsPayable.supplierId,
@@ -848,7 +859,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markAccountPayableAsPaid(id: string, paymentDate: string, lateFees?: string, discount?: string): Promise<AccountPayable | undefined> {
+    // Buscar a conta atual para verificar a data de vencimento
+    const [account] = await db.select().from(accountsPayable).where(eq(accountsPayable.id, id));
+    if (!account) return undefined;
+
     const updateData: any = { status: "paid", paymentDate };
+
+    // Se a data de pagamento for diferente da data de vencimento original,
+    // guardar a data original e atualizar o vencimento para a data do pagamento
+    if (paymentDate !== account.dueDate) {
+      updateData.originalDueDate = account.dueDate;
+      updateData.dueDate = paymentDate;
+    }
+
     if (lateFees !== undefined) {
       updateData.lateFees = lateFees || null;
     }
@@ -863,16 +886,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async bulkMarkAccountsPayableAsPaid(ids: string[], paymentDate: string, paymentMethod?: string): Promise<AccountPayable[]> {
-    const updateData: any = { status: "paid", paymentDate };
-    if (paymentMethod !== undefined) {
-      updateData.paymentMethod = paymentMethod || null;
+    // Buscar todas as contas para verificar quais precisam atualizar a data de vencimento
+    const accountsToUpdate = await db.select().from(accountsPayable).where(inArray(accountsPayable.id, ids));
+
+    const updatedAccounts: AccountPayable[] = [];
+
+    for (const account of accountsToUpdate) {
+      const updateData: any = { status: "paid", paymentDate };
+
+      // Se a data de pagamento for diferente da data de vencimento,
+      // guardar a data original e atualizar o vencimento
+      if (paymentDate !== account.dueDate) {
+        updateData.originalDueDate = account.dueDate;
+        updateData.dueDate = paymentDate;
+      }
+
+      if (paymentMethod !== undefined) {
+        updateData.paymentMethod = paymentMethod || null;
+      }
+
+      const [updated] = await db.update(accountsPayable)
+        .set(updateData)
+        .where(eq(accountsPayable.id, account.id))
+        .returning();
+
+      if (updated) {
+        updatedAccounts.push(updated);
+      }
     }
 
-    const updated = await db.update(accountsPayable)
-      .set(updateData)
-      .where(inArray(accountsPayable.id, ids))
-      .returning();
-    return updated;
+    return updatedAccounts;
   }
 
   async deleteAccountPayable(id: string): Promise<boolean> {
@@ -913,6 +956,7 @@ export class DatabaseStorage implements IStorage {
       description: accountsReceivable.description,
       amount: accountsReceivable.amount,
       dueDate: accountsReceivable.dueDate,
+      originalDueDate: accountsReceivable.originalDueDate,
       receivedDate: accountsReceivable.receivedDate,
       status: accountsReceivable.status,
       clientId: accountsReceivable.clientId,
@@ -987,7 +1031,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markAccountReceivableAsReceived(id: string, receivedDate: string, discount?: string, paymentMethod?: string): Promise<AccountReceivable | undefined> {
+    // Buscar a conta atual para verificar a data de vencimento
+    const [account] = await db.select().from(accountsReceivable).where(eq(accountsReceivable.id, id));
+    if (!account) return undefined;
+
     const updateData: any = { status: "received", receivedDate };
+
+    // Se a data de recebimento for diferente da data de vencimento original,
+    // guardar a data original e atualizar o vencimento para a data do recebimento
+    if (receivedDate !== account.dueDate) {
+      updateData.originalDueDate = account.dueDate;
+      updateData.dueDate = receivedDate;
+    }
+
     if (discount !== undefined) {
       updateData.discount = discount || null;
     }
@@ -1002,16 +1058,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async bulkMarkAccountsReceivableAsReceived(ids: string[], receivedDate: string, paymentMethod?: string): Promise<AccountReceivable[]> {
-    const updateData: any = { status: "received", receivedDate };
-    if (paymentMethod !== undefined) {
-      updateData.paymentMethod = paymentMethod || null;
+    // Buscar todas as contas para verificar quais precisam atualizar a data de vencimento
+    const accountsToUpdate = await db.select().from(accountsReceivable).where(inArray(accountsReceivable.id, ids));
+
+    const updatedAccounts: AccountReceivable[] = [];
+
+    for (const account of accountsToUpdate) {
+      const updateData: any = { status: "received", receivedDate };
+
+      // Se a data de recebimento for diferente da data de vencimento,
+      // guardar a data original e atualizar o vencimento
+      if (receivedDate !== account.dueDate) {
+        updateData.originalDueDate = account.dueDate;
+        updateData.dueDate = receivedDate;
+      }
+
+      if (paymentMethod !== undefined) {
+        updateData.paymentMethod = paymentMethod || null;
+      }
+
+      const [updated] = await db.update(accountsReceivable)
+        .set(updateData)
+        .where(eq(accountsReceivable.id, account.id))
+        .returning();
+
+      if (updated) {
+        updatedAccounts.push(updated);
+      }
     }
 
-    const updated = await db.update(accountsReceivable)
-      .set(updateData)
-      .where(inArray(accountsReceivable.id, ids))
-      .returning();
-    return updated;
+    return updatedAccounts;
   }
 
   async deleteAccountReceivable(id: string): Promise<boolean> {
@@ -1026,7 +1102,7 @@ export class DatabaseStorage implements IStorage {
 
     let allPayables, allReceivables, allCashFlowEntries;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
       allCashFlowEntries = await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
@@ -1149,7 +1225,7 @@ export class DatabaseStorage implements IStorage {
   async getCashFlowData(period: string, companyId?: string): Promise<CashFlowData[]> {
     let allPayables, allReceivables, allCashFlowEntries;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
       allCashFlowEntries = await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
@@ -1253,7 +1329,7 @@ export class DatabaseStorage implements IStorage {
     // Calcular valores separados por status
     let allReceivables, allPayables, allCashFlowEntries;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allCashFlowEntries = await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
@@ -1376,7 +1452,7 @@ export class DatabaseStorage implements IStorage {
 
     let allReceivables, allPayables, allCashFlowEntries;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allCashFlowEntries = await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
@@ -1467,7 +1543,7 @@ export class DatabaseStorage implements IStorage {
     const cashFlowData = await this.getCashFlowData(period, companyId);
     let allPayables, allReceivables;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
     } else {
@@ -1517,7 +1593,7 @@ export class DatabaseStorage implements IStorage {
     const cashFlowData = await this.getCashFlowDataByDateRange(startDate, endDate, companyId);
     let allPayables, allReceivables;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
     } else {
@@ -1565,7 +1641,7 @@ export class DatabaseStorage implements IStorage {
   async getCashFlowAlerts(companyId?: string): Promise<CashFlowAlert[]> {
     let allPayables, allReceivables;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
     } else {
@@ -1649,7 +1725,7 @@ export class DatabaseStorage implements IStorage {
     console.log(`[DEBUG] getDailyMovements called for date: ${date}`);
 
     let allPayables, allReceivables, allCashFlowEntries;
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
       allCashFlowEntries = await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
@@ -1839,7 +1915,7 @@ export class DatabaseStorage implements IStorage {
   async getMovementsByDateRange(startDate: string, endDate: string, companyId?: string): Promise<DailyMovement[]> {
     let allPayables, allReceivables, allCashFlowEntries;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
       allCashFlowEntries = await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
@@ -2004,13 +2080,13 @@ export class DatabaseStorage implements IStorage {
   async createCashFlowEntry(entry: InsertCashFlowEntry & { userId: string; companyId?: string }): Promise<CashFlowEntry> {
     const [newEntry] = await db.insert(cashFlowEntries).values({
       ...entry,
-      amount: entry.amount,
+      amount: entry.amount.toString(),
     }).returning();
     return newEntry;
   }
 
   async getCashFlowEntries(companyId?: string): Promise<CashFlowEntry[]> {
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       return await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
     }
     return await db.select().from(cashFlowEntries);
@@ -2019,7 +2095,7 @@ export class DatabaseStorage implements IStorage {
   async getCashFlowDataByDateRange(startDate: string, endDate: string, companyId?: string): Promise<CashFlowData[]> {
     let allPayables, allReceivables, allCashFlowEntries;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
       allCashFlowEntries = await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
@@ -2117,7 +2193,7 @@ export class DatabaseStorage implements IStorage {
   async getCategoryExpensesByDateRange(startDate: string, endDate: string, companyId?: string): Promise<CategoryExpense[]> {
     let allPayables, allCashFlowEntries;
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       allPayables = await db.select().from(accountsPayable).where(eq(accountsPayable.companyId, companyId));
       allCashFlowEntries = await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
     } else {
@@ -2487,6 +2563,52 @@ export class DatabaseStorage implements IStorage {
 
   async deletePaymentConfig(id: string): Promise<boolean> {
     const [deleted] = await db.update(paymentConfigs).set({ active: false }).where(eq(paymentConfigs.id, id)).returning();
+    return !!deleted;
+  }
+
+  // Retail Sales (Vendas de Varejo)
+  async getRetailSales(companyId?: string): Promise<RetailSale[]> {
+    const conditions = [eq(retailSales.active, true)];
+    if (companyId && companyId !== "all") {
+      conditions.push(eq(retailSales.companyId, companyId));
+    }
+    return await db.select().from(retailSales).where(and(...conditions)).orderBy(retailSales.date);
+  }
+
+  async getRetailSale(id: string): Promise<RetailSale | undefined> {
+    const [sale] = await db.select().from(retailSales).where(eq(retailSales.id, id));
+    return sale;
+  }
+
+  async createRetailSale(sale: InsertRetailSale & { userId: string; companyId?: string }): Promise<RetailSale> {
+    const [newSale] = await db.insert(retailSales).values({
+      ...sale,
+      amount: sale.amount.toString(),
+      unitPrice: sale.unitPrice?.toString() || null,
+    }).returning();
+    return newSale;
+  }
+
+  async updateRetailSale(id: string, saleData: Partial<InsertRetailSale>): Promise<RetailSale | undefined> {
+    const updateData: any = { ...saleData };
+    if (saleData.amount !== undefined) {
+      updateData.amount = saleData.amount.toString();
+    }
+    if (saleData.unitPrice !== undefined) {
+      updateData.unitPrice = saleData.unitPrice?.toString() || null;
+    }
+    const [updated] = await db.update(retailSales).set(updateData).where(eq(retailSales.id, id)).returning();
+    return updated;
+  }
+
+  async deleteRetailSale(id: string): Promise<boolean> {
+    const [deleted] = await db.update(retailSales).set({ active: false }).where(eq(retailSales.id, id)).returning();
+    return !!deleted;
+  }
+
+  // Cash Flow Entries - delete method
+  async deleteCashFlowEntry(id: string): Promise<boolean> {
+    const [deleted] = await db.delete(cashFlowEntries).where(eq(cashFlowEntries.id, id)).returning();
     return !!deleted;
   }
 

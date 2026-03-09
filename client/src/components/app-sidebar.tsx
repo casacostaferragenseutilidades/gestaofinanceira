@@ -21,6 +21,7 @@ import {
   Settings,
   LogOut,
   Bell,
+  Store,
 } from "lucide-react";
 import {
   Sidebar,
@@ -70,6 +71,13 @@ const mainNavItems = [
     icon: CreditCard,
     description: "Controle de Cartão e PIX",
     badge: null,
+  },
+  {
+    title: "Vendas Varejo",
+    url: "/vendas-varejo",
+    icon: Store,
+    description: "Registre vendas do dia",
+    badge: "new",
   },
   {
     title: "Fluxo de Caixa",
@@ -195,17 +203,17 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar/95 backdrop-blur supports-[backdrop-filter]:bg-sidebar/90">
-      <SidebarHeader className="p-3 border-b border-sidebar-border/50 group-data-[state=collapsed]:p-2">
+      <SidebarHeader className="p-4 border-b border-sidebar-border/50 group-data-[state=collapsed]:p-2">
         <div className="flex items-center gap-3 transition-all duration-300 group-data-[state=collapsed]:justify-center">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary via-emerald-500 to-emerald-600 shadow-lg shadow-primary/25 ring-1 ring-white/10 transition-all duration-300 hover:shadow-primary/40 hover:scale-105">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-violet-600 to-indigo-700 shadow-xl shadow-primary/30 ring-1 ring-white/10 transition-all duration-300 hover:shadow-primary/50 hover:scale-105">
             <TrendingUp className="h-6 w-6 text-white transition-transform duration-300 group-data-[state=collapsed]:scale-110 flex-shrink-0" />
           </div>
           <div className="flex flex-col group-data-[state=collapsed]:hidden overflow-hidden transition-all duration-300">
-            <span className="text-lg font-bold tracking-tight text-sidebar-foreground truncate bg-gradient-to-r from-primary to-emerald-600 bg-clip-text text-transparent" data-testid="text-app-name">
+            <span className="text-xl font-black tracking-tight text-sidebar-foreground truncate bg-gradient-to-r from-primary to-indigo-600 bg-clip-text text-transparent" data-testid="text-app-name">
               FinControl
             </span>
-            <span className="text-xs font-medium text-muted-foreground truncate">
-              Gestão Financeira
+            <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest truncate">
+              Finance Hub
             </span>
           </div>
         </div>
@@ -228,17 +236,23 @@ export function AppSidebar() {
                       asChild={!hasSubItems}
                       isActive={isActive}
                       className={cn(
-                        "h-8 px-1 rounded-lg transition-all duration-200 hover:bg-sidebar-accent/50 group",
-                        isActive && "bg-sidebar-accent shadow-sm border-l-2 border-primary",
-                        "group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-10 group-data-[state=collapsed]:h-10"
+                        "h-11 px-2 rounded-xl transition-all duration-300 hover:bg-sidebar-accent group",
+                        isActive && "bg-sidebar-accent shadow-md shadow-primary/5 ring-1 ring-primary/10",
+                        "group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-11 group-data-[state=collapsed]:h-11"
                       )}
                       onClick={hasSubItems ? () => toggleExpanded(item.title) : undefined}
                     >
                       {hasSubItems ? (
                         <div className="flex items-center justify-between w-full group-data-[state=collapsed]:justify-center">
                           <div className="flex items-center gap-3 group-data-[state=collapsed]:justify-center">
-                            <item.icon className="h-4 w-4 text-sidebar-foreground/80 group-hover:text-sidebar-foreground transition-colors flex-shrink-0" />
-                            <span className="truncate group-data-[state=collapsed]:hidden">{item.title}</span>
+                            <item.icon className={cn(
+                              "h-5 w-5 transition-colors flex-shrink-0",
+                              isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                            )} />
+                            <span className={cn(
+                              "truncate font-medium group-data-[state=collapsed]:hidden",
+                              isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                            )}>{item.title}</span>
                           </div>
                           <ChevronRight className={cn(
                             "h-4 w-4 transition-transform duration-200 text-sidebar-foreground/60 group-data-[state=collapsed]:hidden flex-shrink-0",
@@ -247,11 +261,17 @@ export function AppSidebar() {
                         </div>
                       ) : (
                         <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s/g, "-")}`} className="flex items-center gap-3 group-data-[state=collapsed]:justify-center">
-                          <item.icon className="h-4 w-4 text-sidebar-foreground/80 group-hover:text-sidebar-foreground transition-colors flex-shrink-0" />
-                          <span className="truncate group-data-[state=collapsed]:hidden">{item.title}</span>
+                          <item.icon className={cn(
+                            "h-5 w-5 transition-colors flex-shrink-0",
+                            isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                          )} />
+                          <span className={cn(
+                            "truncate font-medium transition-colors group-data-[state=collapsed]:hidden",
+                            isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                          )}>{item.title}</span>
                           {item.badge && (
-                            <Badge variant={getBadgeVariant(item.badge)} className="ml-auto text-xs px-1.5 py-0.5 group-data-[state=collapsed]:hidden flex-shrink-0">
-                              {item.badge === 'urgent' ? '!' : item.badge === 'new' ? 'Novo' : ''}
+                            <Badge variant={getBadgeVariant(item.badge)} className="ml-auto text-[10px] font-bold px-1.5 py-0.5 group-data-[state=collapsed]:hidden flex-shrink-0 rounded-full">
+                              {item.badge === 'urgent' ? '!' : item.badge === 'new' ? 'Flux' : ''}
                             </Badge>
                           )}
                         </Link>
@@ -288,11 +308,11 @@ export function AppSidebar() {
         <Separator className="my-1 bg-sidebar-border/50 group-data-[state=collapsed]:my-0.5" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="px-2 text-xs font-semibold text-muted-foreground/70 tracking-wider uppercase">
+          <SidebarGroupLabel className="px-3 py-4 text-[10px] font-black text-muted-foreground/50 tracking-[0.2em] uppercase">
             Cadastros
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="space-y-0.5 group-data-[state=collapsed]:space-y-0">
+            <SidebarMenu className="space-y-1 group-data-[state=collapsed]:space-y-0">
               {settingsNavItems.map((item) => {
                 const isActive = location === item.url || isSubItemActive(item.subItems);
                 const isExpanded = expandedItems.includes(item.title);
@@ -304,17 +324,23 @@ export function AppSidebar() {
                       asChild={!hasSubItems}
                       isActive={isActive}
                       className={cn(
-                        "h-8 px-1 rounded-lg transition-all duration-200 hover:bg-sidebar-accent/50 group",
-                        isActive && "bg-sidebar-accent shadow-sm border-l-2 border-primary",
-                        "group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-10 group-data-[state=collapsed]:h-10"
+                        "h-11 px-2 rounded-xl transition-all duration-300 hover:bg-sidebar-accent group",
+                        isActive && "bg-sidebar-accent shadow-md shadow-primary/5 ring-1 ring-primary/10",
+                        "group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-11 group-data-[state=collapsed]:h-11"
                       )}
                       onClick={hasSubItems ? () => toggleExpanded(item.title) : undefined}
                     >
                       {hasSubItems ? (
                         <div className="flex items-center justify-between w-full group-data-[state=collapsed]:justify-center">
                           <div className="flex items-center gap-3 group-data-[state=collapsed]:justify-center">
-                            <item.icon className="h-4 w-4 text-sidebar-foreground/80 group-hover:text-sidebar-foreground transition-colors flex-shrink-0" />
-                            <span className="truncate group-data-[state=collapsed]:hidden">{item.title}</span>
+                            <item.icon className={cn(
+                              "h-5 w-5 transition-colors flex-shrink-0",
+                              isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                            )} />
+                            <span className={cn(
+                              "truncate font-medium group-data-[state=collapsed]:hidden",
+                              isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                            )}>{item.title}</span>
                           </div>
                           <ChevronRight className={cn(
                             "h-4 w-4 transition-transform duration-200 text-sidebar-foreground/60 group-data-[state=collapsed]:hidden flex-shrink-0",
@@ -323,14 +349,20 @@ export function AppSidebar() {
                         </div>
                       ) : (
                         <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s/g, "-")}`} className="flex items-center gap-3 group-data-[state=collapsed]:justify-center">
-                          <item.icon className="h-4 w-4 text-sidebar-foreground/80 group-hover:text-sidebar-foreground transition-colors flex-shrink-0" />
-                          <span className="truncate group-data-[state=collapsed]:hidden">{item.title}</span>
+                          <item.icon className={cn(
+                            "h-5 w-5 transition-colors flex-shrink-0",
+                            isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                          )} />
+                          <span className={cn(
+                            "truncate font-medium transition-colors group-data-[state=collapsed]:hidden",
+                            isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                          )}>{item.title}</span>
                         </Link>
                       )}
                     </SidebarMenuButton>
 
                     {hasSubItems && isExpanded && (
-                      <SidebarMenuSub className="ml-6 mt-1 space-y-0.5 group-data-[state=collapsed]:hidden">
+                      <SidebarMenuSub className="ml-8 mt-1 space-y-1 border-l-2 border-primary/10 pl-2 group-data-[state=collapsed]:hidden">
                         {item.subItems!.map((subItem) => {
                           const isSubActive = location === subItem.url;
                           return (
@@ -338,7 +370,10 @@ export function AppSidebar() {
                               <SidebarMenuSubButton
                                 asChild
                                 isActive={isSubActive}
-                                className="h-8 px-2 rounded-md transition-all duration-200 hover:bg-sidebar-accent/30 text-sm"
+                                className={cn(
+                                  "h-9 px-3 rounded-lg transition-all duration-200 hover:bg-sidebar-accent/50 text-sm font-medium",
+                                  isSubActive ? "text-primary bg-primary/5" : "text-sidebar-foreground/60"
+                                )}
                               >
                                 <Link href={subItem.url}>
                                   <span className="truncate">{subItem.title}</span>
@@ -357,27 +392,33 @@ export function AppSidebar() {
         </SidebarGroup>
         {user?.role === "admin" && (
           <>
-            <Separator className="my-1 bg-sidebar-border/50 group-data-[state=collapsed]:my-0.5" />
+            <Separator className="my-2 bg-sidebar-border/50 group-data-[state=collapsed]:my-1" />
             <SidebarGroup>
-              <SidebarGroupLabel className="px-2 text-xs font-semibold text-muted-foreground/70 tracking-wider uppercase">
+              <SidebarGroupLabel className="px-3 py-4 text-[10px] font-black text-muted-foreground/50 tracking-[0.2em] uppercase">
                 Administração
               </SidebarGroupLabel>
               <SidebarGroupContent>
-                <SidebarMenu className="space-y-0.5 group-data-[state=collapsed]:space-y-0">
+                <SidebarMenu className="space-y-1 group-data-[state=collapsed]:space-y-0">
                   {adminNavItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         asChild
                         isActive={location === item.url}
                         className={cn(
-                          "h-8 px-1 rounded-lg transition-all duration-200 hover:bg-sidebar-accent/50 group",
-                          location === item.url && "bg-sidebar-accent shadow-sm border-l-2 border-primary",
-                          "group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-10 group-data-[state=collapsed]:h-10"
+                          "h-11 px-2 rounded-xl transition-all duration-300 hover:bg-sidebar-accent group",
+                          location === item.url && "bg-sidebar-accent shadow-md shadow-primary/5 ring-1 ring-primary/10",
+                          "group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-11 group-data-[state=collapsed]:h-11"
                         )}
                       >
                         <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s/g, "-")}`} className="flex items-center gap-3 group-data-[state=collapsed]:justify-center">
-                          <item.icon className="h-4 w-4 text-sidebar-foreground/80 group-hover:text-sidebar-foreground transition-colors flex-shrink-0" />
-                          <span className="truncate group-data-[state=collapsed]:hidden">{item.title}</span>
+                          <item.icon className={cn(
+                            "h-5 w-5 transition-colors flex-shrink-0",
+                            location === item.url ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                          )} />
+                          <span className={cn(
+                            "truncate font-medium transition-colors group-data-[state=collapsed]:hidden",
+                            location === item.url ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-primary"
+                          )}>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -399,16 +440,16 @@ export function AppSidebar() {
             <span className="truncate group-data-[state=collapsed]:hidden">Sincronizar</span>
           </Button>
 
-          <div className="flex items-center gap-2 px-1 py-1 rounded-lg bg-muted/50 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-10 group-data-[state=collapsed]:h-10">
-            <div className="h-6 w-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+          <div className="flex items-center gap-3 px-2 py-2 rounded-xl bg-gradient-to-br from-muted/50 to-muted dark:from-muted/20 dark:to-muted/10 border border-border/50 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:w-11 group-data-[state=collapsed]:h-11">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-indigo-600 shadow-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
               {user?.fullName?.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() || 'U'}
             </div>
             <div className="flex flex-col min-w-0 group-data-[state=collapsed]:hidden">
-              <span className="text-xs font-medium text-sidebar-foreground truncate">
+              <span className="text-sm font-bold text-sidebar-foreground truncate">
                 {user?.fullName || 'Usuário'}
               </span>
-              <span className="text-xs text-muted-foreground truncate capitalize">
-                {user?.role || 'user'}
+              <span className="text-[10px] font-bold text-primary uppercase tracking-tighter truncate">
+                {user?.role || 'Premium'}
               </span>
             </div>
           </div>

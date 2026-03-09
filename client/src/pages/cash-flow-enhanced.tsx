@@ -853,7 +853,30 @@ export default function CashFlow() {
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
                         }`}>
-                        {movement.type === 'income' ? '+' : '-'}{formatCurrency(movement.amount)}
+                        {(() => {
+                          // Calcular valor final considerando desconto e acréscimo
+                          const baseAmount = parseFloat(movement.amount?.toString() || "0");
+                          const lateFees = parseFloat(movement.lateFees?.toString() || "0");
+                          const discount = parseFloat(movement.discount?.toString() || "0");
+                          
+                          // Para despesas: valor + juros/multa - desconto
+                          // Para receitas: valor - desconto
+                          const finalAmount = movement.type === 'income'
+                            ? baseAmount - discount
+                            : baseAmount + lateFees - discount;
+                          
+                          return (
+                            <div className="flex flex-col items-end">
+                              <span>{movement.type === 'income' ? '+' : '-'}{formatCurrency(finalAmount)}</span>
+                              {(lateFees > 0 || discount > 0) && (
+                                <span className="text-xs text-muted-foreground">
+                                  {lateFees > 0 && `+Juros: ${formatCurrency(lateFees)} `}
+                                  {discount > 0 && `-Desc: ${formatCurrency(discount)}`}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(movement.status)}>

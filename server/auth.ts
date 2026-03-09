@@ -177,6 +177,7 @@ export const requireAuth: RequestHandler = (req, res, next) => {
 export const requireRole = (...roles: UserRole[]): RequestHandler => {
   return (req, res, next) => {
     console.log(`[Auth Debug] Checking role for ${req.path}, allowed: ${roles}`);
+    console.log(`[Auth Debug] User role: ${req.user?.role}`);
     if (!req.isAuthenticated()) {
       console.log(`[Auth Debug] Rejecting with 401 (not auth) for ${req.path}`);
       return res.status(401).json({ error: "Não autenticado" });

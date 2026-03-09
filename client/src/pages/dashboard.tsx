@@ -44,7 +44,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { formatCurrency, formatDate, getDaysUntilDue, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, getDaysUntilDue, getStatusColor, getStatusLabel } from "@/lib/utils";
 import type { DashboardStats, CashFlowData, CategoryExpense, AccountPayable, AccountReceivable } from "@shared/schema";
 
 const CHART_COLORS = [
@@ -71,35 +71,34 @@ function KPICard({
   variant?: "default" | "success" | "warning" | "danger";
 }) {
   const variantStyles = {
-    default: "bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300",
-    success: "bg-gradient-to-br from-emerald-50 to-emerald-100 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300",
-    warning: "bg-gradient-to-br from-yellow-50 to-yellow-100 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300",
-    danger: "bg-gradient-to-br from-red-50 to-red-100 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300",
+    default: "bg-white dark:bg-slate-900 border-0 shadow-xl shadow-primary/5 hover:shadow-primary/10 transition-all duration-300 ring-1 ring-primary/5",
+    success: "bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 border-0 shadow-xl shadow-violet-500/5 hover:shadow-violet-500/10 transition-all duration-300 ring-1 ring-violet-500/10",
+    warning: "bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 border-0 shadow-xl shadow-amber-500/5 hover:shadow-amber-500/10 transition-all duration-300 ring-1 ring-amber-500/10",
+    danger: "bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-900/10 dark:to-red-900/10 border-0 shadow-xl shadow-rose-500/5 hover:shadow-rose-500/10 transition-all duration-300 ring-1 ring-rose-500/10",
   };
 
   return (
-    <Card className={variantStyles[variant]}>
+    <Card className={cn(variantStyles[variant], "overflow-hidden group rounded-2xl")}>
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
-        <CardTitle className="text-sm font-semibold text-slate-700">
+        <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
           {title}
         </CardTitle>
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
-          <Icon className="h-4 w-4 text-slate-600" />
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/10 to-indigo-500/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+          <Icon className="h-5 w-5 text-primary" />
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-slate-900" data-testid={`text-kpi-${title.toLowerCase().replace(/\s/g, "-")}`}>{value}</div>
+        <div className="text-3xl font-black text-foreground tracking-tight" data-testid={`text-kpi-${title.toLowerCase().replace(/\s/g, "-")}`}>{value}</div>
         {trend && trendValue && (
-          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-2">
-            {trend === "up" ? (
-              <ArrowUpRight className="h-3 w-3 text-emerald-600" />
-            ) : (
-              <ArrowDownRight className="h-3 w-3 text-red-600" />
-            )}
-            <span className={trend === "up" ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>
+          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-3">
+            <span className={cn(
+              "flex items-center gap-0.5 px-1.5 py-0.5 rounded-full font-bold",
+              trend === "up" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30" : "bg-rose-100 text-rose-700 dark:bg-rose-900/30"
+            )}>
+              {trend === "up" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
               {trendValue}
             </span>
-            <span className="text-muted-foreground">vs. período anterior</span>
+            <span className="text-[10px] font-medium opacity-70">vs. período anterior</span>
           </p>
         )}
       </CardContent>
@@ -238,56 +237,68 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
-      <div className="flex items-center justify-between">
+    <div className="p-8 space-y-8 bg-background min-h-screen">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent" data-testid="text-page-title">Dashboard</h1>
-          <p className="text-muted-foreground mt-2">
-            Visão geral das suas finanças e métricas de desempenho
+          <h1 className="text-5xl font-black bg-gradient-to-r from-primary via-violet-600 to-indigo-700 bg-clip-text text-transparent tracking-tighter" data-testid="text-page-title">
+            Dashboard
+          </h1>
+          <p className="text-muted-foreground mt-3 font-medium flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+            Insights financeiros em tempo real
           </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Período: {formatDate(startDate)} - {formatDate(endDate)}
-          </p>
+          <div className="mt-4 flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full w-fit">
+            <Calendar className="h-4 w-4 text-primary" />
+            <span className="text-xs font-bold text-muted-foreground">
+              {formatDate(startDate)} — {formatDate(endDate)}
+            </span>
+          </div>
         </div>
 
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <Label className="text-sm font-medium">Período:</Label>
+        <Card className="bg-card dark:bg-slate-900/50 border shadow-2xl shadow-primary/5 rounded-2xl overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Filter className="h-5 w-5 text-primary" />
+                </div>
+                <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Período</Label>
               </div>
 
-              <Select value={period} onValueChange={handlePeriodChange}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="current">Mês Atual</SelectItem>
-                  <SelectItem value="last">Mês Anterior</SelectItem>
-                  <SelectItem value="quarter">Trimestre</SelectItem>
-                  <SelectItem value="year">Ano</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex flex-wrap items-center gap-4">
+                <Select value={period} onValueChange={handlePeriodChange}>
+                  <SelectTrigger className="w-40 h-10 rounded-xl bg-background border-primary/20 focus:ring-primary whitespace-nowrap">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-primary/20">
+                    <SelectItem value="current">Mês Atual</SelectItem>
+                    <SelectItem value="last">Mês Anterior</SelectItem>
+                    <SelectItem value="quarter">Trimestre</SelectItem>
+                    <SelectItem value="year">Ano</SelectItem>
+                  </SelectContent>
+                </Select>
 
-              <div className="flex items-center gap-2">
-                <Label className="text-sm font-medium">De:</Label>
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-36"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Label className="text-sm font-medium">Até:</Label>
-                <Input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-36"
-                />
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Label className="absolute -top-6 left-1 text-[10px] font-bold text-muted-foreground uppercase opacity-0 transition-opacity">De</Label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-44 h-10 rounded-xl bg-background pl-4 pr-1 border-primary/20 focus-visible:ring-primary"
+                    />
+                  </div>
+                  <div className="h-4 w-[2px] bg-border rounded-full mx-1" />
+                  <div className="relative">
+                    <Label className="absolute -top-6 left-1 text-[10px] font-bold text-muted-foreground uppercase opacity-0 transition-opacity">Até</Label>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-44 h-10 rounded-xl bg-background pl-4 pr-1 border-primary/20 focus-visible:ring-primary"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -400,86 +411,102 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-slate-900">Fluxo de Caixa</CardTitle>
+        <Card className="bg-card dark:bg-slate-900/50 border shadow-2xl shadow-primary/5 rounded-3xl overflow-hidden group">
+          <CardHeader className="pb-3 border-b border-border/50">
+            <CardTitle className="text-xl font-bold text-foreground">Fluxo de Caixa</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             {cashFlowLoading ? (
-              <Skeleton className="h-[300px] w-full" />
+              <Skeleton className="h-[300px] w-full rounded-2xl" />
             ) : cashFlow && cashFlow.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={cashFlow}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <defs>
+                    <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.1} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="8 8" vertical={false} className="stroke-muted/30" />
                   <XAxis
                     dataKey="date"
+                    axisLine={false}
+                    tickLine={false}
                     tickFormatter={(value) => {
                       const date = new Date(value + "T00:00:00");
                       return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
                     }}
-                    className="text-xs"
+                    className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider"
                   />
                   <YAxis
+                    axisLine={false}
+                    tickLine={false}
                     tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
-                    className="text-xs"
+                    className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider"
                   />
                   <Tooltip
+                    cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '4 4' }}
+                    contentStyle={{
+                      backgroundColor: "rgba(255, 255, 255, 0.8)",
+                      backdropFilter: "blur(8px)",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "1rem",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                    }}
                     formatter={(value: number) => [formatCurrency(value), ""]}
                     labelFormatter={(label) => formatDate(label)}
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "var(--radius)",
-                    }}
                   />
                   <Line
                     type="monotone"
                     dataKey="income"
                     name="Receitas"
-                    stroke="hsl(var(--chart-1))"
-                    strokeWidth={2}
-                    dot={false}
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={4}
+                    dot={{ r: 4, strokeWidth: 2, fill: 'white' }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
                   />
                   <Line
                     type="monotone"
                     dataKey="expense"
                     name="Despesas"
-                    stroke="hsl(var(--chart-5))"
-                    strokeWidth={2}
-                    dot={false}
+                    stroke="#f43f5e"
+                    strokeWidth={4}
+                    dot={{ r: 4, strokeWidth: 2, fill: 'white' }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
                   />
                   <Line
                     type="monotone"
                     dataKey="balance"
                     name="Saldo"
                     stroke="hsl(var(--chart-2))"
-                    strokeWidth={2}
+                    strokeWidth={4}
+                    strokeDasharray="5 5"
                     dot={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
-                <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                  <TrendingUp className="h-8 w-8 text-slate-400" />
+                <div className="h-16 w-16 rounded-3xl bg-primary/5 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
+                  <TrendingUp className="h-8 w-8 text-primary/40" />
                 </div>
-                <p className="font-medium">Sem dados de fluxo de caixa</p>
-                <p className="text-sm text-muted-foreground mt-1">Adicione transações para visualizar o gráfico</p>
+                <p className="font-bold text-foreground">Sem dados de fluxo</p>
+                <p className="text-xs font-medium opacity-60 mt-1">Registre movimentações para análise</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-slate-900">Despesas por Categoria</CardTitle>
+        <Card className="bg-card dark:bg-slate-900/50 border shadow-2xl shadow-primary/5 rounded-3xl overflow-hidden group">
+          <CardHeader className="pb-3 border-b border-border/50">
+            <CardTitle className="text-xl font-bold text-foreground">Distribuição de Gastos</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             {expensesLoading ? (
-              <Skeleton className="h-[300px] w-full" />
+              <Skeleton className="h-[300px] w-full rounded-2xl" />
             ) : categoryExpenses && categoryExpenses.length > 0 ? (
-              <div className="flex items-center gap-4">
-                <ResponsiveContainer width="50%" height={300}>
+              <div className="flex flex-col md:flex-row items-center gap-8">
+                <ResponsiveContainer width="100%" height={300} className="md:w-1/2">
                   <PieChart>
                     <Pie
                       data={categoryExpenses}
@@ -487,47 +514,61 @@ export default function Dashboard() {
                       nameKey="categoryName"
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
+                      innerRadius={70}
                       outerRadius={100}
-                      paddingAngle={2}
+                      paddingAngle={5}
+                      stroke="none"
                     >
                       {categoryExpenses.map((entry, index) => (
                         <Cell
                           key={`cell-${index}`}
                           fill={CHART_COLORS[index % CHART_COLORS.length]}
+                          className="hover:opacity-80 transition-opacity cursor-pointer outline-none"
                         />
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value: number) => [formatCurrency(value), ""]}
                       contentStyle={{
-                        backgroundColor: "hsl(var(--popover))",
+                        backgroundColor: "rgba(255, 255, 255, 0.8)",
+                        backdropFilter: "blur(8px)",
                         border: "1px solid hsl(var(--border))",
-                        borderRadius: "var(--radius)",
+                        borderRadius: "1rem",
                       }}
+                      formatter={(value: number) => [formatCurrency(value), ""]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 space-y-3 w-full">
                   {categoryExpenses.map((category, index) => (
-                    <div key={category.categoryId} className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-                      />
-                      <span className="text-sm flex-1 truncate">{category.categoryName}</span>
-                      <span className="text-sm font-medium">{category.percentage.toFixed(1)}%</span>
+                    <div key={category.categoryId} className="group/item flex items-center justify-between p-2 rounded-xl hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-3 h-3 rounded-full shadow-sm"
+                          style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                        />
+                        <span className="text-sm font-bold text-muted-foreground group-hover/item:text-foreground transition-colors truncate max-w-[150px]">
+                          {category.categoryName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-foreground">
+                          {formatCurrency(category.amount)}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] font-black border-primary/20 bg-primary/5 text-primary rounded-lg h-5">
+                          {category.percentage.toFixed(0)}%
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
-                <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                  <BarChart3 className="h-8 w-8 text-slate-400" />
+                <div className="h-16 w-16 rounded-3xl bg-primary/5 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
+                  <BarChart3 className="h-8 w-8 text-primary/40" />
                 </div>
-                <p className="font-medium">Sem dados de despesas</p>
-                <p className="text-sm text-muted-foreground mt-1">Registre despesas para ver a distribuição</p>
+                <p className="font-bold text-foreground">Sem despesas registradas</p>
+                <p className="text-xs font-medium opacity-60 mt-1">Sua distribuição aparecerá aqui</p>
               </div>
             )}
           </CardContent>

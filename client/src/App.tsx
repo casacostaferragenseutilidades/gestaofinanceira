@@ -33,6 +33,7 @@ import NotesPage from "@/pages/notes";
 import EmpresasPage from "@/pages/EmpresasPage";
 import ReceiptsControl from "@/pages/receipts-control";
 import PaymentSettings from "@/pages/payment-settings";
+import RetailSales from "@/pages/retail-sales";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/contas-pagar" component={AccountsPayable} />
       <Route path="/contas-receber" component={AccountsReceivable} />
+      <Route path="/vendas-varejo" component={RetailSales} />
       <Route path="/fluxo-caixa" component={CashFlow} />
       <Route path="/dre" component={DRE} />
       <Route path="/metas-financeiras" component={FinancialGoals} />
