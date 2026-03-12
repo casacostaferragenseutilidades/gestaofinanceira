@@ -55,40 +55,38 @@ declare global {
 
 
 export async function setupAuth(app: Express): Promise<void> {
-  let sessionStore: any;
-
   try {
-    if (process.env.VERCEL || process.env.NETLIFY || process.env.DATABASE_URL) {
+    const usePgStore = (process.env.VERCEL || process.env.NETLIFY) 
+      ? false // Force memory store for now on Vercel to isolate 500 error
+      : !!process.env.DATABASE_URL;
+
+    if (usePgStore) {
       console.log("[Auth] Attempting to use PostgreSQL session store...");
       try {
         const connectPgSimple = (await import("connect-pg-simple")).default;
         const PgSession = connectPgSimple(session);
         sessionStore = new PgSession({
-          pool,
+          pool: pool as any,
           tableName: "user_sessions",
           createTableIfMissing: true,
-          pruneSessionInterval: false, // Recommended for serverless
+          pruneSessionInterval: false,
         });
         console.log("[Auth] PostgreSQL session store configured");
       } catch (pgStoreErr: any) {
-        console.warn("[Auth] Failed to initialize PG session store, falling back to MemoryStore:", pgStoreErr.message);
-        const createMemoryStore = (await import("memorystore")).default;
-        const MemoryStore = createMemoryStore(session);
+        console.warn("[Auth] Fallback to MemoryStore:", pgStoreErr.message);
+        const MemoryStore = (await import("memorystore")).default(session);
         sessionStore = new MemoryStore({ checkPeriod: 86400000 });
       }
     } else {
-      console.log("[Auth] Using MemoryStore for sessions (no DATABASE_URL)");
-      const createMemoryStore = (await import("memorystore")).default;
-      const MemoryStore = createMemoryStore(session);
+      console.log("[Auth] Using MemoryStore for sessions");
+      const MemoryStore = (await import("memorystore")).default(session);
       sessionStore = new MemoryStore({
         checkPeriod: 86400000
       });
     }
   } catch (err: any) {
-    console.error("[Auth] Critical error during session store setup:", err);
-    // Absolute final resort fallback
-    const createMemoryStore = (await import("memorystore")).default;
-    const MemoryStore = createMemoryStore(session);
+    console.error("[Auth] Session store error:", err);
+    const MemoryStore = (await import("memorystore")).default(session);
     sessionStore = new MemoryStore({ checkPeriod: 86400000 });
   }
 

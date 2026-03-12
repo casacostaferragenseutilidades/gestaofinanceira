@@ -4,15 +4,19 @@ import pg from "pg";
 import * as schema from "@shared/schema";
 
 const connectionString = process.env.DATABASE_URL || "";
+
 if (!connectionString) {
-  console.warn("[DB] WARNING: DATABASE_URL is not defined in environment variables!");
+  console.warn("[DB] WARNING: DATABASE_URL is not defined!");
 } else {
-  console.log("[DB] DATABASE_URL is defined, trying to connect...");
+  console.log("[DB] DATABASE_URL detected, creating pool...");
 }
 
-export const pool = new pg.Pool({
-  connectionString: connectionString,
-  ssl: { rejectUnauthorized: false },
-});
+export const pool = connectionString 
+  ? new pg.Pool({
+      connectionString: connectionString,
+      ssl: { rejectUnauthorized: false },
+      max: 10,
+    })
+  : null;
 
-export const db = drizzle(pool, { schema });
+export const db = pool ? drizzle(pool, { schema }) : null as any;

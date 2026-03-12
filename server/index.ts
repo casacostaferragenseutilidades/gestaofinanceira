@@ -84,17 +84,18 @@ const initPromise = (async () => {
   try {
     log("Starting application initialization...");
     
-    // 1. Initialize Database Schema (VITAL for Vercel/new environments)
+    // 1. Initialize Database Schema (Only if on Vercel or needed)
     try {
-      log("Initializing database schema...");
-      await storage.initializeDatabase();
-      log("✓ Database schema verified");
-      
-      await storage.seedDefaultData();
-      log("✓ Default data seeded");
+      if (process.env.VERCEL || process.env.NETLIFY) {
+        log("Environment is serverless, skipping heavy DB init on boot to avoid timeout.");
+        // We'll trust the DB is either ready or will be initialized lazily elsewhere
+      } else {
+        log("Initializing database schema...");
+        await storage.initializeDatabase().catch(e => log(`⚠ DB Init skipped: ${e.message}`));
+        await storage.seedDefaultData().catch(e => log(`⚠ Seeding skipped: ${e.message}`));
+      }
     } catch (dbErr: any) {
-      log(`⚠ Database initialization warning: ${dbErr.message}`);
-      // Don't throw here, maybe the tables already exist or db is slightly slow
+      log(`⚠ Database initialization skipped: ${dbErr.message}`);
     }
 
     // 2. Setup Auth (Sessions, Passport)
