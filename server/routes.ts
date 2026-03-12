@@ -80,26 +80,34 @@ export function registerRoutes(
             const { data: supabaseUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
             if (!supabaseUser?.user) {
               console.log(`[Login API] User ${user.id} not found in Supabase Auth, syncing...`);
-              const { data: newSupaUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-                email: req.body.email,
-                password: req.body.password,
-                email_confirm: true,
-                user_metadata: {
-                  full_name: user.fullName,
-                  username: user.username,
-                },
+              
+              // Check if user already exists by email first
+              const { data: existingUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+                page: 1,
+                perPage: 100
               });
-              if (createErr) {
-                // If user already exists by email, that's OK
-                if (!createErr.message?.includes('already')) {
-                  console.warn(`[Login API] Supabase sync warning:`, createErr.message);
-                }
+              
+              if (listError) {
+                console.warn(`[Login API] Error listing users:`, listError.message);
+              } else if (existingUsers.users && existingUsers.users.some(user => user.email === req.body.email)) {
+                console.log(`[Login API] User already exists in Supabase with email ${req.body.email}`);
               } else {
-                console.log(`[Login API] User synced to Supabase Auth: ${newSupaUser?.user?.id}`);
-                // Update local DB user ID to match Supabase ID if different
-                if (newSupaUser?.user?.id && newSupaUser.user.id !== user.id) {
-                  console.log(`[Login API] Updating local user ID from ${user.id} to ${newSupaUser.user.id}`);
-                  // Note: updating user ID is complex; just log for now
+                // Create new user in Supabase
+                const { data: newSupaUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+                  email: req.body.email,
+                  password: req.body.password,
+                  email_confirm: true,
+                  user_metadata: {
+                    full_name: user.fullName,
+                    username: user.username,
+                    local_user_id: user.id, // Keep reference to local user
+                  },
+                });
+                
+                if (createErr) {
+                  console.warn(`[Login API] Supabase sync warning:`, createErr.message);
+                } else {
+                  console.log(`[Login API] User synced to Supabase Auth: ${newSupaUser?.user?.id}`);
                 }
               }
             } else {
@@ -138,13 +146,12 @@ export function registerRoutes(
 
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { username, email, password, fullName } = req.body;
-      console.log(`[Register API] Starting registration for: ${username}`);
+      const { username, email, password, fullName, role, team } = req.body;
+      console.log(`[Register API] Starting registration for: ${username} (${email})`);
 
       // Database connection test
       try {
-        const dbCheck = await db.execute(sql`SELECT 1`);
-        console.log(`[Register API] Database check OK: ${JSON.stringify(dbCheck)}`);
+        await db.execute(sql`SELECT 1`);
       } catch (dbErr: any) {
         console.error(`[Register API] Database check FAILED:`, dbErr);
         return res.status(500).json({ error: "Banco de dados indisponível", details: dbErr.message });
@@ -164,7 +171,7 @@ export function registerRoutes(
         return res.status(400).json({ error: "Este email já está cadastrado" });
       }
 
-      // Step 1: Create user in Supabase Auth first
+      // Step 1: Create user in Supabase Auth
       let supabaseUserId: string | null = null;
       if (supabaseAdmin) {
         try {
@@ -172,49 +179,45 @@ export function registerRoutes(
           const { data: supabaseUser, error: supabaseError } = await supabaseAdmin.auth.admin.createUser({
             email,
             password,
-            email_confirm: true, // Auto-confirm email
+            email_confirm: true,
             user_metadata: {
               full_name: fullName,
               username: username,
+              role: role || "viewer",
             },
           });
 
           if (supabaseError) {
-            // If user already exists in Supabase, try to get their ID
-            if (supabaseError.message?.includes('already been registered') || supabaseError.message?.includes('already exists')) {
-              console.log(`[Register API] User already exists in Supabase Auth, fetching ID...`);
+            if (supabaseError.message?.includes('already') || supabaseError.message?.includes('exists')) {
+              console.log(`[Register API] User exists in Supabase, trying to match email...`);
               const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
-              const existingSupaUser = listData?.users?.find(u => u.email === email);
+              const existingSupaUser = listData?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
               if (existingSupaUser) {
                 supabaseUserId = existingSupaUser.id;
-                console.log(`[Register API] Found existing Supabase user: ${supabaseUserId}`);
               }
             } else {
               console.error(`[Register API] Supabase Auth error:`, supabaseError);
-              // Continue with local-only registration if Supabase fails
             }
           } else if (supabaseUser?.user) {
             supabaseUserId = supabaseUser.user.id;
-            console.log(`[Register API] Supabase Auth user created: ${supabaseUserId}`);
+            console.log(`[Register API] Supabase Auth user created/confirmed: ${supabaseUserId}`);
           }
         } catch (supabaseErr: any) {
           console.error(`[Register API] Supabase Auth exception:`, supabaseErr);
-          // Continue with local-only registration if Supabase fails
         }
-      } else {
-        console.warn(`[Register API] Supabase Admin not configured, skipping Supabase Auth registration`);
       }
 
       // Step 2: Hash password and create user in local database
-      console.log(`[Register API] Hashing password...`);
       const salt = randomBytes(16).toString("hex");
       const buf = (await scryptAsync(password, salt, 64)) as Buffer;
       const hashedPassword = `${buf.toString("hex")}.${salt}`;
 
-      // Use Supabase user ID if available, otherwise generate our own
       const userId = supabaseUserId || randomUUID();
 
-      console.log(`[Register API] Creating user in storage with ID: ${userId}`);
+      const userRole = role || "viewer";
+      const userTeam = team || null;
+
+      console.log(`[Register API] Creating user in storage: ${username} with role ${userRole}`);
       const newUser = await storage.createUser({
         id: userId,
         username,
@@ -222,12 +225,15 @@ export function registerRoutes(
         password: hashedPassword,
         name: fullName,
         fullName,
-        role: "viewer",
-        status: "active"
+        role: userRole,
+        team: userTeam,
+        status: "active",
+        active: true
       });
-      console.log(`[Register API] User created successfully: ${newUser.id}`);
 
-      // Auto-login after registration - WAIT for it
+      // Auto-login only if not requested by an admin (simplified check: if session exists and is admin, don't login as the new user)
+      const isRequestedByAdmin = req.isAuthenticated() && req.user?.role === 'admin';
+      
       const userToLogin = {
         id: newUser.id,
         username: newUser.username,
@@ -237,14 +243,16 @@ export function registerRoutes(
         team: newUser.team
       };
 
+      if (isRequestedByAdmin) {
+        console.log(`[Register API] User created by admin, skipping auto-login for: ${username}`);
+        return res.json({ user: userToLogin, createdByAdmin: true });
+      }
+
       req.login(userToLogin, (err) => {
         if (err) {
           console.error("[Register API] Auto-login error:", err);
-          // Return the user anyway as they were created
           return res.json({ user: userToLogin, loginError: err.message });
         }
-
-        console.log(`[Register API] Auto-login success for: ${username}`);
         return res.json({ user: userToLogin });
       });
 
@@ -252,9 +260,7 @@ export function registerRoutes(
       console.error("[Register API] registration error:", error);
       res.status(500).json({
         error: "Erro ao criar usuário",
-        details: error.message,
-        stack: error.stack,
-        type: error.name
+        details: error.message
       });
     }
   });

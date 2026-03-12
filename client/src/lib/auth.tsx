@@ -16,7 +16,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (username: string, email: string, password: string, fullName: string) => Promise<void>;
+  register: (username: string, email: string, password: string, fullName: string, role?: string, team?: string) => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthContextType | null>(null);
@@ -54,8 +54,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const register = React.useCallback(async (username: string, email: string, password: string, fullName: string) => {
-    const response = await apiRequest("POST", "/api/auth/register", { username, email, password, fullName });
+  const register = React.useCallback(async (username: string, email: string, password: string, fullName: string, role?: string, team?: string) => {
+    const response = await apiRequest("POST", "/api/auth/register", { username, email, password, fullName, role, team });
     const data = await response.json();
     setUser(data.user);
   }, []);
