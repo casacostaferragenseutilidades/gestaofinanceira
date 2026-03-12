@@ -55,6 +55,7 @@ declare global {
 
 
 export async function setupAuth(app: Express): Promise<void> {
+  let sessionStore: any;
   try {
     const usePgStore = (process.env.VERCEL || process.env.NETLIFY) 
       ? false // Force memory store for now on Vercel to isolate 500 error
