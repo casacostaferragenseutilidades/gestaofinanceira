@@ -80,50 +80,57 @@ app.use((req, res, next) => {
 let isInitialized = false;
 let initError: Error | null = null;
 
-const initPromise = (async () => {
-  try {
-    log("Starting application initialization...");
-    
-    // 1. Initialize Database Schema (Only if on Vercel or needed)
-    try {
-      if (process.env.VERCEL || process.env.NETLIFY) {
-        log("Environment is serverless, skipping heavy DB init on boot to avoid timeout.");
-        // We'll trust the DB is either ready or will be initialized lazily elsewhere
-      } else {
-        log("Initializing database schema...");
-        await storage.initializeDatabase().catch(e => log(`⚠ DB Init skipped: ${e.message}`));
-        await storage.seedDefaultData().catch(e => log(`⚠ Seeding skipped: ${e.message}`));
+let initPromise: Promise<void> | null = null;
+
+function ensureInitialized() {
+  if (!initPromise) {
+    initPromise = (async () => {
+      try {
+        log("Starting application initialization...");
+        
+        // 1. Initialize Database Schema (Only if on Vercel or needed)
+        try {
+          if (process.env.VERCEL || process.env.NETLIFY) {
+            log("Environment is serverless, skipping heavy DB init on boot to avoid timeout.");
+            // We'll trust the DB is either ready or will be initialized lazily elsewhere
+          } else {
+            log("Initializing database schema...");
+            await storage.initializeDatabase().catch(e => log(`⚠ DB Init skipped: ${e.message}`));
+            await storage.seedDefaultData().catch(e => log(`⚠ Seeding skipped: ${e.message}`));
+          }
+        } catch (dbErr: any) {
+          log(`⚠ Database initialization skipped: ${dbErr.message}`);
+        }
+
+        // 2. Setup Auth (Sessions, Passport)
+        log("Setting up authentication...");
+        await setupAuth(app);
+        log("✓ Auth setup completed");
+
+        // 3. Register API Routes
+        log("Registering routes...");
+        registerRoutes(httpServer, app);
+        log("✓ Routes registered");
+
+        if (app.get("env") === "development" && !process.env.NETLIFY && !process.env.VERCEL) {
+          const { setupVite } = await import("./vite");
+          await setupVite(httpServer!, app);
+        } else if (!process.env.VERCEL && !process.env.NETLIFY) {
+          serveStatic(app);
+        }
+
+        isInitialized = true;
+        log("✓ Application fully initialized");
+      } catch (err: any) {
+        log(`❌ Critical error during initialization: ${err.message}`);
+        console.error(err);
+        initError = err;
+        // Do not rethrow here to prevent top-level rejection crash
       }
-    } catch (dbErr: any) {
-      log(`⚠ Database initialization skipped: ${dbErr.message}`);
-    }
-
-    // 2. Setup Auth (Sessions, Passport)
-    log("Setting up authentication...");
-    await setupAuth(app);
-    log("✓ Auth setup completed");
-
-    // 3. Register API Routes
-    log("Registering routes...");
-    registerRoutes(httpServer, app);
-    log("✓ Routes registered");
-
-    if (app.get("env") === "development" && !process.env.NETLIFY && !process.env.VERCEL) {
-      const { setupVite } = await import("./vite");
-      await setupVite(httpServer!, app);
-    } else if (!process.env.VERCEL && !process.env.NETLIFY) {
-      serveStatic(app);
-    }
-
-    isInitialized = true;
-    log("✓ Application fully initialized");
-  } catch (err: any) {
-    log(`❌ Critical error during initialization: ${err.message}`);
-    console.error(err);
-    initError = err;
-    // Do not rethrow here to prevent top-level rejection crash
+    })();
   }
-})();
+  return initPromise;
+}
 
 // Middleware to ensure server is initialized
 app.use(async (req, res, next) => {
@@ -137,7 +144,7 @@ app.use(async (req, res, next) => {
 
   if (!isInitialized) {
     try {
-      await initPromise;
+      await ensureInitialized();
     } catch (err: any) {
       return res.status(500).json({
         error: "Falha na inicialização",
