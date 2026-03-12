@@ -57,31 +57,39 @@ declare global {
 export async function setupAuth(app: Express): Promise<void> {
   let sessionStore: any;
 
-  if (process.env.VERCEL || process.env.NETLIFY) {
-    // On serverless environments, we prefer a persistent store if DATABASE_URL is available
-    if (process.env.DATABASE_URL) {
-      const connectPgSimple = (await import("connect-pg-simple")).default;
-      const PgSession = connectPgSimple(session);
-      sessionStore = new PgSession({
-        pool,
-        tableName: "user_sessions",
-        createTableIfMissing: true,
-      });
+  try {
+    if (process.env.VERCEL || process.env.NETLIFY || process.env.DATABASE_URL) {
+      console.log("[Auth] Attempting to use PostgreSQL session store...");
+      try {
+        const connectPgSimple = (await import("connect-pg-simple")).default;
+        const PgSession = connectPgSimple(session);
+        sessionStore = new PgSession({
+          pool,
+          tableName: "user_sessions",
+          createTableIfMissing: true,
+          pruneSessionInterval: false, // Recommended for serverless
+        });
+        console.log("[Auth] PostgreSQL session store configured");
+      } catch (pgStoreErr: any) {
+        console.warn("[Auth] Failed to initialize PG session store, falling back to MemoryStore:", pgStoreErr.message);
+        const createMemoryStore = (await import("memorystore")).default;
+        const MemoryStore = createMemoryStore(session);
+        sessionStore = new MemoryStore({ checkPeriod: 86400000 });
+      }
     } else {
+      console.log("[Auth] Using MemoryStore for sessions (no DATABASE_URL)");
       const createMemoryStore = (await import("memorystore")).default;
       const MemoryStore = createMemoryStore(session);
       sessionStore = new MemoryStore({
-        checkPeriod: 86400000 // prune expired entries every 24h
+        checkPeriod: 86400000
       });
     }
-  } else {
-    const connectPgSimple = (await import("connect-pg-simple")).default;
-    const PgSession = connectPgSimple(session);
-    sessionStore = new PgSession({
-      pool,
-      tableName: "user_sessions",
-      createTableIfMissing: true,
-    });
+  } catch (err: any) {
+    console.error("[Auth] Critical error during session store setup:", err);
+    // Absolute final resort fallback
+    const createMemoryStore = (await import("memorystore")).default;
+    const MemoryStore = createMemoryStore(session);
+    sessionStore = new MemoryStore({ checkPeriod: 86400000 });
   }
 
   app.use(

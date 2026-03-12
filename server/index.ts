@@ -82,10 +82,28 @@ let initError: Error | null = null;
 
 const initPromise = (async () => {
   try {
+    log("Starting application initialization...");
+    
+    // 1. Initialize Database Schema (VITAL for Vercel/new environments)
+    try {
+      log("Initializing database schema...");
+      await storage.initializeDatabase();
+      log("✓ Database schema verified");
+      
+      await storage.seedDefaultData();
+      log("✓ Default data seeded");
+    } catch (dbErr: any) {
+      log(`⚠ Database initialization warning: ${dbErr.message}`);
+      // Don't throw here, maybe the tables already exist or db is slightly slow
+    }
+
+    // 2. Setup Auth (Sessions, Passport)
+    log("Setting up authentication...");
     await setupAuth(app);
     log("✓ Auth setup completed");
 
-    // registerRoutes now accepts null for httpServer
+    // 3. Register API Routes
+    log("Registering routes...");
     registerRoutes(httpServer, app);
     log("✓ Routes registered");
 
@@ -97,8 +115,10 @@ const initPromise = (async () => {
     }
 
     isInitialized = true;
+    log("✓ Application fully initialized");
   } catch (err: any) {
-    log(`✗ Critical error during initialization: ${err}`);
+    log(`❌ Critical error during initialization: ${err.message}`);
+    console.error(err);
     initError = err;
     throw err;
   }
@@ -144,30 +164,22 @@ export { app, httpServer };
 if (process.env.NODE_ENV !== "test" && !process.env.VERCEL && !process.env.NETLIFY) {
   (async () => {
     try {
-      // Test database connection
+      // Test database connection immediately
       try {
         await db.execute(sql`SELECT 1`);
-        log("✓ Database connected successfully");
+        log("✓ Database connection test passed");
       } catch (err) {
-        log(`✗ Database connection failed: ${err}`);
+        log(`✗ Database connection test failed: ${err}`);
       }
 
-      // Inicializar banco de dados e semear dados de forma segura
-      try {
-        await storage.initializeDatabase();
-        log("✓ Database initialized successfully");
-        await storage.seedDefaultData();
-        log("✓ Default data seeded successfully");
-      } catch (err) {
-        log(`⚠ Database initialization/seeding skipped: ${err}`);
-      }
+      await initPromise;
 
       const port = parseInt(process.env.PORT || "5001", 10);
       httpServer?.listen(port, "0.0.0.0", () => {
         log(`serving on port ${port}`);
       });
     } catch (err) {
-      log(`Fatal error during startup: ${err}`);
+      log(`Fatal error durante o startup: ${err}`);
       process.exit(1);
     }
   })();
