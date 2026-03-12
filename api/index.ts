@@ -1,6 +1,12 @@
-export default function handler(req: any, res: any) {
-  res.status(200).json({ 
-    status: "alive-absolute-minimal", 
-    time: new Date().toISOString() 
+import express from 'express';
+
+const app = express();
+
+app.get('/api/health-check', (req, res) => {
+  res.json({ 
+    status: "alive-express-minimal", 
+    time: new Date().toISOString()
   });
-}
+});
+
+export default app;
