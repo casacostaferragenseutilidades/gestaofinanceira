@@ -29,7 +29,6 @@ const allowlist = [
   "xlsx",
   "zod",
   "zod-validation-error",
-  "pg",
   "serverless-http"
 ];
 // Note: 'pg' removed from bundle list to avoid native module issues on Vercel

@@ -121,7 +121,7 @@ const initPromise = (async () => {
     log(`❌ Critical error during initialization: ${err.message}`);
     console.error(err);
     initError = err;
-    throw err;
+    // Do not rethrow here to prevent top-level rejection crash
   }
 })();
 
