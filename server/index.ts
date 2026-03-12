@@ -134,6 +134,15 @@ async function ensureInitialized() {
   return initPromise;
 }
 
+app.get("/api/health-check", (req, res) => {
+  res.json({ 
+    status: "alive", 
+    isInitialized, 
+    hasError: !!initError,
+    error: initError?.message 
+  });
+});
+
 // Middleware to ensure server is initialized
 app.use(async (req, res, next) => {
   if (initError) {
