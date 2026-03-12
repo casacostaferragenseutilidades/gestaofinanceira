@@ -6,11 +6,8 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('FATAL: Unhandled Rejection at:', promise, 'reason:', reason);
 });
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupAuth } from "./auth";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { storage } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
@@ -82,12 +79,17 @@ let initError: Error | null = null;
 
 let initPromise: Promise<void> | null = null;
 
-function ensureInitialized() {
+async function ensureInitialized() {
   if (!initPromise) {
     initPromise = (async () => {
       try {
         log("Starting application initialization...");
         
+        // Dynamic imports to prevent top-level boot crashes
+        const { storage } = await import("./storage");
+        const { setupAuth } = await import("./auth");
+        const { registerRoutes } = await import("./routes");
+
         // 1. Initialize Database Schema (Only if on Vercel or needed)
         try {
           if (process.env.VERCEL || process.env.NETLIFY) {
