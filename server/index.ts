@@ -70,14 +70,9 @@ async function ensureInitialized() {
   if (!initPromise) {
     initPromise = (async () => {
       try {
-        log("Starting application initialization...");
+        log("DEBUG: Starting dummy initialization...");
         
-        if (!process.env.VERCEL && !process.env.NETLIFY) {
-           await import("dotenv/config");
-           const { createServer } = await import("http");
-           httpServer = createServer(app);
-        }
-
+        /* Commenting out to isolate crash
         // Dynamic imports to prevent top-level boot crashes
         const { storage } = await import("./storage");
         const { setupAuth } = await import("./auth");
@@ -116,14 +111,14 @@ async function ensureInitialized() {
         } else if (!process.env.VERCEL && !process.env.NETLIFY) {
           serveStatic(app);
         }
+        */
 
         isInitialized = true;
-        log("✓ Application fully initialized");
+        log("✓ Dummy Initialization completed");
       } catch (err: any) {
         log(`❌ Critical error during initialization: ${err.message}`);
         console.error(err);
         initError = err;
-        // Do not rethrow here to prevent top-level rejection crash
       }
     })();
   }
