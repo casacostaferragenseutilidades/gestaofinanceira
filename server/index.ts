@@ -1,18 +1,7 @@
-import "dotenv/config";
-process.on('uncaughtException', (err) => {
-  console.error('FATAL: Uncaught Exception:', err);
-});
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('FATAL: Unhandled Rejection at:', promise, 'reason:', reason);
-});
 import express, { type Request, Response, NextFunction } from "express";
-import { serveStatic } from "./static";
-import { createServer } from "http";
-
-console.log("[Server] Modules loaded, initializing application...");
 
 const app = express();
-const httpServer = (process.env.VERCEL || process.env.NETLIFY) ? null : createServer(app);
+let httpServer: any = null;
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -83,12 +72,19 @@ async function ensureInitialized() {
       try {
         log("Starting application initialization...");
         
+        if (!process.env.VERCEL && !process.env.NETLIFY) {
+           await import("dotenv/config");
+           const { createServer } = await import("http");
+           httpServer = createServer(app);
+        }
+
         // Dynamic imports to prevent top-level boot crashes
         const { storage } = await import("./storage");
         const { setupAuth } = await import("./auth");
         const { registerRoutes } = await import("./routes");
         const { db } = await import("./db");
         const { sql } = await import("drizzle-orm");
+        const { serveStatic } = await import("./static");
 
         // 1. Initialize Database Schema (Only if on Vercel or needed)
         try {
