@@ -8,8 +8,6 @@ process.on('unhandledRejection', (reason, promise) => {
 import express, { type Request, Response, NextFunction } from "express";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { db } from "./db";
-import { sql } from "drizzle-orm";
 
 console.log("[Server] Modules loaded, initializing application...");
 
@@ -89,6 +87,8 @@ async function ensureInitialized() {
         const { storage } = await import("./storage");
         const { setupAuth } = await import("./auth");
         const { registerRoutes } = await import("./routes");
+        const { db } = await import("./db");
+        const { sql } = await import("drizzle-orm");
 
         // 1. Initialize Database Schema (Only if on Vercel or needed)
         try {
@@ -185,8 +185,12 @@ if (process.env.NODE_ENV !== "test" && !process.env.VERCEL && !process.env.NETLI
     try {
       // Test database connection immediately
       try {
-        await db.execute(sql`SELECT 1`);
-        log("✓ Database connection test passed");
+        const { db } = await import("./db");
+        const { sql } = await import("drizzle-orm");
+        if (db) {
+          await db.execute(sql`SELECT 1`);
+          log("✓ Database connection test passed");
+        }
       } catch (err) {
         log(`✗ Database connection test failed: ${err}`);
       }
