@@ -64,11 +64,14 @@ async function ensureInitialized() {
       try {
         log("Starting application initialization...");
 
-        // Dynamic imports to prevent top-level boot crashes
-        const storageModule = await import("./storage.js");
+        // Dynamic imports without explicit .js extensions for better compatibility
+        log("Importing modules...");
+        const storageModule = await import("./storage");
         const { storage } = storageModule;
-        const { setupAuth } = await import("./auth.js");
-        const { registerRoutes } = await import("./routes.js");
+        const authModule = await import("./auth");
+        const { setupAuth } = authModule;
+        const routesModule = await import("./routes");
+        const { registerRoutes } = routesModule;
 
         // 1. Initialize Database Schema (skip heavy init on serverless)
         try {
@@ -103,10 +106,10 @@ async function ensureInitialized() {
         // 4. Static files (only in non-serverless environments)
         if (!process.env.VERCEL && !process.env.NETLIFY) {
           if (app.get("env") === "development") {
-            const { setupVite } = await import("./vite.js");
+            const { setupVite } = await import("./vite");
             await setupVite(httpServer!, app);
           } else {
-            const { serveStatic } = await import("./static.js");
+            const { serveStatic } = await import("./static");
             serveStatic(app);
           }
         }
@@ -125,17 +128,27 @@ async function ensureInitialized() {
 
 // Middleware to ensure server is initialized before handling real requests
 app.use(async (req, res, next) => {
+  // Ignorar health-check da inicialização para evitar loop
+  if (req.path === "/api/health-check" || req.path === "/health") {
+    return next();
+  }
+
   if (initError) {
+    console.error("[Server Init Error] Request blocked:", initError);
     return res.status(500).json({
       error: "Erro na inicialização do servidor",
       details: initError.message,
+      stack: process.env.NODE_ENV === "development" ? initError.stack : undefined
     });
   }
 
   if (!isInitialized) {
     try {
+      log(`Incoming request ${req.path} before init, ensuring initialization...`);
       await ensureInitialized();
+      if (initError) throw initError;
     } catch (err: any) {
+      console.error("[Server Init Fallback Error]:", err);
       return res.status(500).json({
         error: "Falha na inicialização",
         details: err.message,
