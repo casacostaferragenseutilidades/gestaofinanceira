@@ -1104,7 +1104,8 @@ export function registerRoutes(
         return res.status(401).json({ error: "Usuário não autenticado" });
       }
 
-      const companyId = req.headers['x-company-id'] as string;
+      // Vendas de varejo são independentes de empresa - companyId vazio
+      const companyId = ''; // Varejo não tem empresa associada
       const type = req.body.type || 'income';
 
       // Create the retail sale
@@ -1120,7 +1121,7 @@ export function registerRoutes(
         description: `${type === 'income' ? 'Venda' : 'Despesa'}: ${sale.description}`,
         type: type,
         amount: parseFloat(sale.amount.toString()),
-        companyId
+        companyId: '' // Varejo não tem empresa
       });
 
       const cashFlowEntry = await storage.createCashFlowEntry({
@@ -1136,7 +1137,7 @@ export function registerRoutes(
         document: sale.document,
         costCenter: sale.costCenter,
         userId,
-        companyId,
+        companyId: '', // Varejo não tem empresa
       });
 
       console.log(`[DEBUG] Cash flow entry created:`, cashFlowEntry);
@@ -1153,8 +1154,37 @@ export function registerRoutes(
 
   app.patch("/api/retail-sales/:id", requireFinancial, async (req, res) => {
     try {
+      // Primeiro, buscar a venda atual para obter cashFlowEntryId
+      const existingSale = await storage.getRetailSale(req.params.id);
+      if (!existingSale) return res.status(404).json({ error: "Venda não encontrada" });
+
+      // Atualizar a venda
       const sale = await storage.updateRetailSale(req.params.id, req.body);
       if (!sale) return res.status(404).json({ error: "Venda não encontrada" });
+
+      // Se houver cashFlowEntryId, atualizar também a entrada no fluxo de caixa
+      if (existingSale.cashFlowEntryId) {
+        const type = req.body.type || existingSale.type || 'income';
+        const cashFlowUpdateData = {
+          date: req.body.date || existingSale.date,
+          description: req.body.description ? `${type === 'income' ? 'Venda' : 'Despesa'}: ${req.body.description}` : undefined,
+          type: req.body.type || undefined,
+          amount: req.body.amount ? parseFloat(req.body.amount).toString() : undefined,
+          paymentMethod: req.body.paymentMethod || undefined,
+          account: req.body.account || undefined,
+          categoryId: req.body.categoryId || undefined,
+          document: req.body.document || undefined,
+          costCenter: req.body.costCenter || undefined,
+        };
+
+        // Remover valores undefined
+        Object.keys(cashFlowUpdateData).forEach(key => 
+          cashFlowUpdateData[key] === undefined && delete cashFlowUpdateData[key]
+        );
+
+        await storage.updateCashFlowEntry(existingSale.cashFlowEntryId, cashFlowUpdateData);
+      }
+
       res.json(sale);
     } catch (error: any) {
       console.error("Error updating retail sale:", error);

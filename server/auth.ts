@@ -57,9 +57,7 @@ declare global {
 export async function setupAuth(app: Express): Promise<void> {
   let sessionStore: any;
   try {
-    const usePgStore = (process.env.VERCEL || process.env.NETLIFY) 
-      ? false // Force memory store for now on Vercel to isolate 500 error
-      : !!process.env.DATABASE_URL;
+    const usePgStore = false; // Forçar MemoryStore para evitar timeouts de conexão
 
     if (usePgStore) {
       console.log("[Auth] Attempting to use PostgreSQL session store...");

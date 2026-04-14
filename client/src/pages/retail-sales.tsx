@@ -130,7 +130,7 @@ export default function RetailSales() {
     queryKey: ["/api/bank-accounts"],
   });
 
-  // Create sale mutation
+  // Create/Update sale mutation
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const saleData = {
@@ -138,27 +138,40 @@ export default function RetailSales() {
         amount: parseFloat(data.amount),
       };
       console.log("[DEBUG] Enviando dados para retail-sales:", saleData);
-      const response = await apiRequest("POST", "/api/retail-sales", saleData);
-      console.log("[DEBUG] Resposta do servidor:", response);
-      return response.json();
+      
+      if (editingSale) {
+        // Editar venda existente
+        const response = await apiRequest("PATCH", `/api/retail-sales/${editingSale.id}`, saleData);
+        console.log("[DEBUG] Resposta do servidor (PATCH):", response);
+        return response.json();
+      } else {
+        // Criar nova venda
+        const response = await apiRequest("POST", "/api/retail-sales", saleData);
+        console.log("[DEBUG] Resposta do servidor (POST):", response);
+        return response.json();
+      }
     },
     onSuccess: () => {
-      console.log("[DEBUG] Venda criada com sucesso!");
+      console.log("[DEBUG] Venda salva com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["/api/retail-sales"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cash-flow/summary"] });
       toast({
-        title: "Venda registrada",
-        description: "A venda foi registrada com sucesso e aparecerá no fluxo de caixa.",
+        title: editingSale ? "Venda atualizada" : "Venda registrada",
+        description: editingSale 
+          ? "A venda foi atualizada com sucesso."
+          : "A venda foi registrada com sucesso e aparecerá no fluxo de caixa.",
       });
       resetForm();
       setIsDialogOpen(false);
     },
     onError: (error) => {
-      console.error("[DEBUG] Erro ao criar venda:", error);
+      console.error("[DEBUG] Erro ao salvar venda:", error);
       toast({
         title: "Erro",
-        description: "Não foi possível registrar a venda.",
+        description: editingSale 
+          ? "Não foi possível atualizar a venda."
+          : "Não foi possível registrar a venda.",
         variant: "destructive",
       });
     },

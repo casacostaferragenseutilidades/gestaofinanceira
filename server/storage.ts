@@ -145,6 +145,13 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private ensureDb() {
+    if (!db) {
+      throw new Error("Banco de dados não inicializado. Verifique se a variável de ambiente DATABASE_URL está configurada corretamente no painel do Vercel.");
+    }
+    return db;
+  }
+
   private formatDate(date: Date, daysOffset: number = 0): string {
     const d = new Date(date);
     d.setDate(d.getDate() + daysOffset);
@@ -152,11 +159,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async seedDefaultData(): Promise<void> {
-    const existingCategories = await db.select().from(categories);
+    const existingCategories = await this.ensureDb().select().from(categories);
     if (existingCategories.length > 0) return;
 
     // Create default admin user
-    const existingUsers = await db.select().from(users);
+    const existingUsers = await this.ensureDb().select().from(users);
     if (existingUsers.length === 0) {
       const { scrypt, randomBytes } = await import("crypto");
       const { promisify } = await import("util");
@@ -166,7 +173,7 @@ export class DatabaseStorage implements IStorage {
       const buf = (await scryptAsync("admin123", salt, 64)) as Buffer;
       const hashedPassword = `${buf.toString("hex")}.${salt}`;
 
-      await db.insert(users).values({
+      await this.ensureDb().insert(users).values({
         username: "admin",
         email: "admin@fincontrol.com",
         password: hashedPassword,
@@ -254,7 +261,7 @@ export class DatabaseStorage implements IStorage {
     ];
 
     for (const cat of defaultCategories) {
-      await db.insert(categories).values(cat);
+      await this.ensureDb().insert(categories).values(cat);
     }
 
     const defaultCostCenters = [
@@ -265,7 +272,7 @@ export class DatabaseStorage implements IStorage {
     ];
 
     for (const cc of defaultCostCenters) {
-      await db.insert(costCenters).values(cc);
+      await this.ensureDb().insert(costCenters).values(cc);
     }
 
     const supplierData = [
@@ -274,7 +281,7 @@ export class DatabaseStorage implements IStorage {
     ];
 
     for (const sup of supplierData) {
-      await db.insert(suppliers).values(sup);
+      await this.ensureDb().insert(suppliers).values(sup);
     }
 
     const clientData = [
@@ -283,13 +290,13 @@ export class DatabaseStorage implements IStorage {
     ];
 
     for (const cli of clientData) {
-      await db.insert(clients).values(cli);
+      await this.ensureDb().insert(clients).values(cli);
     }
 
-    const allSuppliers = await db.select().from(suppliers);
-    const allClients = await db.select().from(clients);
-    const allCategories = await db.select().from(categories);
-    const allCostCenters = await db.select().from(costCenters);
+    const allSuppliers = await this.ensureDb().select().from(suppliers);
+    const allClients = await this.ensureDb().select().from(clients);
+    const allCategories = await this.ensureDb().select().from(categories);
+    const allCostCenters = await this.ensureDb().select().from(costCenters);
 
     const expenseCategories = allCategories.filter(c => c.type === "expense");
     const incomeCategories = allCategories.filter(c => c.type === "income" && c.dreCategory === "revenue");
@@ -324,7 +331,7 @@ export class DatabaseStorage implements IStorage {
 
     for (let i = 0; i < receivables.length; i++) {
       const rec = receivables[i];
-      await db.insert(accountsReceivable).values({
+      await this.ensureDb().insert(accountsReceivable).values({
         ...rec,
         clientId: allClients[i % allClients.length]?.id || null,
         categoryId: incomeCategories[i % incomeCategories.length]?.id || null,
@@ -334,7 +341,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUser(id: string): Promise<User | undefined> {
     try {
-      const [user] = await db.select().from(users).where(eq(users.id, id));
+      const [user] = await this.ensureDb().select().from(users).where(eq(users.id, id));
       return user;
     } catch (err) {
       console.error(`[Storage] Error in getUser(${id}):`, err);
@@ -344,7 +351,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     try {
-      const [user] = await db.select().from(users).where(eq(users.username, username));
+      const [user] = await this.ensureDb().select().from(users).where(eq(users.username, username));
       return user;
     } catch (err) {
       console.error(`[Storage] Error in getUserByUsername(${username}):`, err);
@@ -354,7 +361,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     try {
-      const [user] = await db.select().from(users).where(eq(users.email, email));
+      const [user] = await this.ensureDb().select().from(users).where(eq(users.email, email));
       return user;
     } catch (err) {
       console.error(`[Storage] Error in getUserByEmail(${email}):`, err);
@@ -364,7 +371,7 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(user: InsertUser): Promise<User> {
     try {
-      const [newUser] = await db.insert(users).values(user).returning();
+      const [newUser] = await this.ensureDb().insert(users).values(user).returning();
       return newUser;
     } catch (err) {
       console.error(`[Storage] Error in createUser:`, err);
@@ -374,40 +381,40 @@ export class DatabaseStorage implements IStorage {
 
 
   async getUsers(): Promise<User[]> {
-    return db.select().from(users);
+    return this.ensureDb().select().from(users);
   }
 
   async updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined> {
-    const [updated] = await db.update(users).set(user).where(eq(users.id, id)).returning();
+    const [updated] = await this.ensureDb().update(users).set(user).where(eq(users.id, id)).returning();
     return updated;
   }
 
   async deleteUser(id: string): Promise<boolean> {
-    await db.delete(users).where(eq(users.id, id));
+    await this.ensureDb().delete(users).where(eq(users.id, id));
     return true;
   }
 
   async getSuppliers(): Promise<Supplier[]> {
-    return db.select().from(suppliers);
+    return this.ensureDb().select().from(suppliers);
   }
 
   async getSupplier(id: string): Promise<Supplier | undefined> {
-    const [supplier] = await db.select().from(suppliers).where(eq(suppliers.id, id));
+    const [supplier] = await this.ensureDb().select().from(suppliers).where(eq(suppliers.id, id));
     return supplier;
   }
 
   async createSupplier(supplier: InsertSupplier): Promise<Supplier> {
-    const [newSupplier] = await db.insert(suppliers).values(supplier).returning();
+    const [newSupplier] = await this.ensureDb().insert(suppliers).values(supplier).returning();
     return newSupplier;
   }
 
   async updateSupplier(id: string, supplier: Partial<InsertSupplier>): Promise<Supplier | undefined> {
-    const [updated] = await db.update(suppliers).set(supplier).where(eq(suppliers.id, id)).returning();
+    const [updated] = await this.ensureDb().update(suppliers).set(supplier).where(eq(suppliers.id, id)).returning();
     return updated;
   }
 
   async deactivateSupplier(id: string): Promise<Supplier | undefined> {
-    const [deactivated] = await db.update(suppliers)
+    const [deactivated] = await this.ensureDb().update(suppliers)
       .set({ active: false })
       .where(eq(suppliers.id, id))
       .returning();
@@ -415,7 +422,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async activateSupplier(id: string): Promise<Supplier | undefined> {
-    const [activated] = await db.update(suppliers)
+    const [activated] = await this.ensureDb().update(suppliers)
       .set({ active: true })
       .where(eq(suppliers.id, id))
       .returning();
@@ -423,31 +430,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClients(): Promise<Client[]> {
-    return db.select().from(clients);
+    return this.ensureDb().select().from(clients);
   }
 
   async getClient(id: string): Promise<Client | undefined> {
-    const [client] = await db.select().from(clients).where(eq(clients.id, id));
+    const [client] = await this.ensureDb().select().from(clients).where(eq(clients.id, id));
     return client;
   }
 
   async createClient(client: InsertClient): Promise<Client> {
-    const [newClient] = await db.insert(clients).values(client).returning();
+    const [newClient] = await this.ensureDb().insert(clients).values(client).returning();
     return newClient;
   }
 
   async updateClient(id: string, client: Partial<InsertClient>): Promise<Client | undefined> {
-    const [updated] = await db.update(clients).set(client).where(eq(clients.id, id)).returning();
+    const [updated] = await this.ensureDb().update(clients).set(client).where(eq(clients.id, id)).returning();
     return updated;
   }
 
   async deleteClient(id: string): Promise<boolean> {
-    await db.delete(clients).where(eq(clients.id, id));
+    await this.ensureDb().delete(clients).where(eq(clients.id, id));
     return true;
   }
 
   async getCategories(): Promise<Category[]> {
-    return db.select().from(categories);
+    return this.ensureDb().select().from(categories);
   }
 
   async getCategory(id: string): Promise<Category | undefined> {
@@ -456,41 +463,41 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCategory(category: InsertCategory): Promise<Category> {
-    const [newCategory] = await db.insert(categories).values(category).returning();
+    const [newCategory] = await this.ensureDb().insert(categories).values(category).returning();
     return newCategory;
   }
 
   async updateCategory(id: string, category: Partial<InsertCategory>): Promise<Category | undefined> {
-    const [updated] = await db.update(categories).set(category).where(eq(categories.id, id)).returning();
+    const [updated] = await this.ensureDb().update(categories).set(category).where(eq(categories.id, id)).returning();
     return updated;
   }
 
   async deleteCategory(id: string): Promise<boolean> {
-    await db.delete(categories).where(eq(categories.id, id));
+    await this.ensureDb().delete(categories).where(eq(categories.id, id));
     return true;
   }
 
   async getCostCenters(): Promise<CostCenter[]> {
-    return db.select().from(costCenters);
+    return this.ensureDb().select().from(costCenters);
   }
 
   async getCostCenter(id: string): Promise<CostCenter | undefined> {
-    const [costCenter] = await db.select().from(costCenters).where(eq(costCenters.id, id));
+    const [costCenter] = await this.ensureDb().select().from(costCenters).where(eq(costCenters.id, id));
     return costCenter;
   }
 
   async createCostCenter(costCenter: InsertCostCenter): Promise<CostCenter> {
-    const [newCostCenter] = await db.insert(costCenters).values(costCenter).returning();
+    const [newCostCenter] = await this.ensureDb().insert(costCenters).values(costCenter).returning();
     return newCostCenter;
   }
 
   async updateCostCenter(id: string, costCenter: Partial<InsertCostCenter>): Promise<CostCenter | undefined> {
-    const [updated] = await db.update(costCenters).set(costCenter).where(eq(costCenters.id, id)).returning();
+    const [updated] = await this.ensureDb().update(costCenters).set(costCenter).where(eq(costCenters.id, id)).returning();
     return updated;
   }
 
   async deleteCostCenter(id: string): Promise<boolean> {
-    await db.delete(costCenters).where(eq(costCenters.id, id));
+    await this.ensureDb().delete(costCenters).where(eq(costCenters.id, id));
     return true;
   }
 
@@ -511,7 +518,7 @@ export class DatabaseStorage implements IStorage {
         ));
 
       // Contas a Receber (Pending)
-      const [receivablesResult] = await db.select({
+      const [receivablesResult] = await this.ensureDb().select({
         total: sql<number>`sum(${accountsReceivable.amount})`
       })
         .from(accountsReceivable)
@@ -522,7 +529,7 @@ export class DatabaseStorage implements IStorage {
 
       // Calculated Realized Cash Balance (Saldo Caixa)
       // Income 1: Received Accounts Receivable
-      const [receivedResult] = await db.select({
+      const [receivedResult] = await this.ensureDb().select({
         total: sql<number>`sum(${accountsReceivable.amount})`
       })
         .from(accountsReceivable)
@@ -532,7 +539,7 @@ export class DatabaseStorage implements IStorage {
         ));
 
       // Income 2: Confirmed Cash Flow Incomes
-      const [cashInResult] = await db.select({
+      const [cashInResult] = await this.ensureDb().select({
         total: sql<number>`sum(${cashFlowEntries.amount})`
       })
         .from(cashFlowEntries)
@@ -543,7 +550,7 @@ export class DatabaseStorage implements IStorage {
         ));
 
       // Expense 1: Paid Accounts Payable
-      const [paidResult] = await db.select({
+      const [paidResult] = await this.ensureDb().select({
         total: sql<number>`sum(${accountsPayable.amount})`
       })
         .from(accountsPayable)
@@ -553,7 +560,7 @@ export class DatabaseStorage implements IStorage {
         ));
 
       // Expense 2: Confirmed Cash Flow Expenses
-      const [cashOutResult] = await db.select({
+      const [cashOutResult] = await this.ensureDb().select({
         total: sql<number>`sum(${cashFlowEntries.amount})`
       })
         .from(cashFlowEntries)
@@ -582,17 +589,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCompany(id: string): Promise<Company | undefined> {
-    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    const [company] = await this.ensureDb().select().from(companies).where(eq(companies.id, id));
     return company;
   }
 
   async getCompanyByCnpj(cnpj: string): Promise<Company | undefined> {
-    const [company] = await db.select().from(companies).where(eq(companies.cnpj, cnpj));
+    const [company] = await this.ensureDb().select().from(companies).where(eq(companies.cnpj, cnpj));
     return company;
   }
 
   async createCompany(company: InsertCompany): Promise<Company> {
-    const [newCompany] = await db.insert(companies).values({
+    const [newCompany] = await this.ensureDb().insert(companies).values({
       ...company,
       // Tratar valores nulos da API externa
       razaoSocial: company.razaoSocial || "Razão Social não informada",
@@ -606,7 +613,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCompany(id: string, company: Partial<InsertCompany>): Promise<Company | undefined> {
-    const [updated] = await db.update(companies).set({
+    const [updated] = await this.ensureDb().update(companies).set({
       ...company,
       updatedAt: new Date()
     }).where(eq(companies.id, id)).returning();
@@ -614,7 +621,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCompany(id: string): Promise<boolean> {
-    await db.delete(companies).where(eq(companies.id, id));
+    await this.ensureDb().delete(companies).where(eq(companies.id, id));
     return true;
   }
 
@@ -639,7 +646,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Join with categories and suppliers to get names
-    const results = await db.select({
+    const results = await this.ensureDb().select({
       id: accountsPayable.id,
       description: accountsPayable.description,
       amount: accountsPayable.amount,
@@ -750,7 +757,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Check for existing entries to avoid duplicates
-    const existingEntries = await db.select({ dueDate: accountsPayable.dueDate })
+    const existingEntries = await this.ensureDb().select({ dueDate: accountsPayable.dueDate })
       .from(accountsPayable)
       .where(and(
         eq(accountsPayable.description, account.description),
@@ -815,7 +822,7 @@ export class DatabaseStorage implements IStorage {
       return;
     }
 
-    const existingEntries = await db.select({ dueDate: accountsReceivable.dueDate })
+    const existingEntries = await this.ensureDb().select({ dueDate: accountsReceivable.dueDate })
       .from(accountsReceivable)
       .where(and(
         eq(accountsReceivable.description, account.description),
@@ -854,7 +861,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (entriesToCreate.length > 0) {
-      await db.insert(accountsReceivable).values(entriesToCreate);
+      await this.ensureDb().insert(accountsReceivable).values(entriesToCreate);
     }
   }
 
@@ -951,7 +958,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Join with categories and clients to get names
-    const results = await db.select({
+    const results = await this.ensureDb().select({
       id: accountsReceivable.id,
       description: accountsReceivable.description,
       amount: accountsReceivable.amount,
@@ -1008,7 +1015,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAccountReceivable(account: InsertAccountReceivable): Promise<AccountReceivable> {
-    const [newAccount] = await db.insert(accountsReceivable).values({
+    const [newAccount] = await this.ensureDb().insert(accountsReceivable).values({
       ...account,
       status: account.status || "pending",
     }).returning();
@@ -1735,7 +1742,7 @@ export class DatabaseStorage implements IStorage {
       allCashFlowEntries = await db.select().from(cashFlowEntries);
     }
 
-    const allCategories = await db.select().from(categories);
+    const allCategories = await this.ensureDb().select().from(categories);
     const allBalanceAdjustments = await db.select().from(balanceAdjustments);
 
     console.log(`[DEBUG] Found ${allCashFlowEntries.length} cash flow entries`);
@@ -1925,7 +1932,7 @@ export class DatabaseStorage implements IStorage {
       allCashFlowEntries = await db.select().from(cashFlowEntries);
     }
 
-    const allCategories = await db.select().from(categories);
+    const allCategories = await this.ensureDb().select().from(categories);
     const allBalanceAdjustments = await db.select().from(balanceAdjustments);
 
     const movements: DailyMovement[] = [];
@@ -2085,10 +2092,26 @@ export class DatabaseStorage implements IStorage {
     return newEntry;
   }
 
+  async updateCashFlowEntry(id: string, updateData: Partial<InsertCashFlowEntry>): Promise<CashFlowEntry | undefined> {
+    const data: any = { ...updateData };
+    if (updateData.amount !== undefined) {
+      data.amount = updateData.amount.toString();
+    }
+    if (updateData.grossAmount !== undefined) {
+      data.grossAmount = updateData.grossAmount?.toString() || null;
+    }
+    if (updateData.fees !== undefined) {
+      data.fees = updateData.fees?.toString() || null;
+    }
+    const [updated] = await db.update(cashFlowEntries).set(data).where(eq(cashFlowEntries.id, id)).returning();
+    return updated;
+  }
+
   async getCashFlowEntries(companyId?: string): Promise<CashFlowEntry[]> {
     if (companyId && companyId !== "all") {
       return await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
     }
+    // Quando companyId é "all" ou undefined, retorna todas incluindo varejo (companyId vazio)
     return await db.select().from(cashFlowEntries);
   }
 
@@ -2100,6 +2123,7 @@ export class DatabaseStorage implements IStorage {
       allReceivables = await db.select().from(accountsReceivable).where(eq(accountsReceivable.companyId, companyId));
       allCashFlowEntries = await db.select().from(cashFlowEntries).where(eq(cashFlowEntries.companyId, companyId));
     } else {
+      // Inclui todas as movimentações, incluindo varejo (companyId vazio)
       allPayables = await db.select().from(accountsPayable);
       allReceivables = await db.select().from(accountsReceivable);
       allCashFlowEntries = await db.select().from(cashFlowEntries);
@@ -2201,7 +2225,7 @@ export class DatabaseStorage implements IStorage {
       allCashFlowEntries = await db.select().from(cashFlowEntries);
     }
 
-    const allCategories = await db.select().from(categories);
+    const allCategories = await this.ensureDb().select().from(categories);
 
     // Filter by date range
     const filteredPayables = allPayables.filter(p => {
@@ -2242,7 +2266,7 @@ export class DatabaseStorage implements IStorage {
 
   async getCategoryExpenses(): Promise<CategoryExpense[]> {
     const allPayables = await db.select().from(accountsPayable);
-    const allCategories = await db.select().from(categories);
+    const allCategories = await this.ensureDb().select().from(categories);
 
     const expenseCategories = allCategories.filter(c => c.type === "expense");
     const payablesWithCategory = allPayables.filter(p => p.categoryId);
@@ -2266,7 +2290,7 @@ export class DatabaseStorage implements IStorage {
   async getDREData(year: number, month: number): Promise<{ current: DREData; previous: DREData; percentageChange: { grossRevenue: number; netProfit: number } }> {
     const allReceivables = await db.select().from(accountsReceivable);
     const allPayables = await db.select().from(accountsPayable);
-    const allCategories = await db.select().from(categories);
+    const allCategories = await this.ensureDb().select().from(categories);
 
     const calculateDRE = (y: number, m: number): DREData => {
       const monthStart = new Date(y, m - 1, 1);
@@ -2615,6 +2639,11 @@ export class DatabaseStorage implements IStorage {
   // Inicialização do banco de dados
   async initializeDatabase(): Promise<void> {
     try {
+      // Verificar se o banco de dados está inicializado
+      if (!db) {
+        throw new Error("Banco de dados não inicializado. Verifique se a variável de ambiente DATABASE_URL está configurada corretamente no painel do Vercel.");
+      }
+
       // Create bank_accounts table if it doesn't exist
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS bank_accounts (

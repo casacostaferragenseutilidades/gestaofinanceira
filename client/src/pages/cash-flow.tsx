@@ -34,6 +34,13 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { getQueryFn } from "@/lib/queryClient";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Empresa {
   id: string;
@@ -102,6 +109,7 @@ export default function CashFlow() {
   });
   const [selectedMonth, setSelectedMonth] = React.useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
+  const [selectedStatuses, setSelectedStatuses] = React.useState<string[]>(['all']);
 
   // Calcular datas baseadas no mês e ano selecionados
   const startDate = new Date(Date.UTC(selectedYear, selectedMonth, 1)).toISOString().split("T")[0];
@@ -143,7 +151,7 @@ export default function CashFlow() {
 
   // Buscar movimentações manuais do fluxo de caixa
   const { data: cashFlowEntries, isLoading: cashFlowLoading } = useQuery<CashFlowEntry[]>({
-    queryKey: ["/api/cash-flow/entries", { companyId: selectedCompanyId }],
+    queryKey: ["/api/cash-flow/entries", { companyId: selectedCompanyId === "all" ? undefined : selectedCompanyId }],
     queryFn: getQueryFn({ on401: "throw" }),
   });
 
@@ -154,68 +162,79 @@ export default function CashFlow() {
   });
 
   // Filtrar movimentações manuais pelo período selecionado
-  const filteredCashFlowEntries = React.useMemo(() => {
+  const filteredCashFlowEntriesPeriod = React.useMemo(() => {
     if (!cashFlowEntries) return [];
     return cashFlowEntries.filter(e => e.date >= startDate && e.date <= endDate);
   }, [cashFlowEntries, startDate, endDate]);
 
+  // Função para filtrar com base nos status selecionados
+  const filterByStatus = (items: any[], statusField: string = 'status') => {
+    if (selectedStatuses.includes('all')) return items;
+    return items.filter(item => selectedStatuses.includes(item[statusField]));
+  };
+
+  // Filtrar dados com base nos status selecionados
+  const filteredAccountsPayable = filterByStatus(accountsPayable || [], 'status');
+  const filteredAccountsReceivable = filterByStatus(accountsReceivable || [], 'status');
+  const filteredCashFlowEntries = filterByStatus(filteredCashFlowEntriesPeriod, 'status');
+
   // Calcular totais
-  const totalPayable = accountsPayable?.reduce((sum, acc) => {
+  const totalReceivable = filteredAccountsReceivable.reduce((sum, acc) => {
+    const amt = parseFloat(acc.amount) || 0;
+    const disc = parseFloat(acc.discount as string) || 0;
+    return sum + (amt - disc);
+  }, 0) || 0;
+
+  const totalPayable = filteredAccountsPayable.reduce((sum, acc) => {
     const amt = parseFloat(acc.amount) || 0;
     const fees = parseFloat(acc.lateFees as string) || 0;
     const disc = parseFloat(acc.discount as string) || 0;
     return sum + (amt + fees - disc);
   }, 0) || 0;
 
-  const totalReceivable = accountsReceivable?.reduce((sum, acc) => {
-    const amt = parseFloat(acc.amount) || 0;
-    const disc = parseFloat(acc.discount as string) || 0;
-    return sum + (amt - disc);
-  }, 0) || 0;
-
-  // Incluir movimentações manuais nos totais
+  // Incluir movimentações manuais nos totais (já filtradas)
   const totalManualIncome = filteredCashFlowEntries.filter(e => e.type === 'income').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) || 0;
   const totalManualExpense = filteredCashFlowEntries.filter(e => e.type === 'expense').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) || 0;
 
-  const totalPayablePending = accountsPayable?.filter(a => a.status === 'pending').reduce((sum, acc) => {
+  // Cálculos específicos por status (para cards específicos)
+  const totalPayablePending = filteredAccountsPayable.filter(a => a.status === 'pending').reduce((sum, acc) => {
     const amt = parseFloat(acc.amount) || 0;
     const fees = parseFloat(acc.lateFees as string) || 0;
     const disc = parseFloat(acc.discount as string) || 0;
     return sum + (amt + fees - disc);
   }, 0) || 0;
 
-  const totalReceivablePending = accountsReceivable?.filter(a => a.status === 'pending').reduce((sum, acc) => {
+  const totalReceivablePending = filteredAccountsReceivable.filter(a => a.status === 'pending').reduce((sum, acc) => {
     const amt = parseFloat(acc.amount) || 0;
     const disc = parseFloat(acc.discount as string) || 0;
     return sum + (amt - disc);
   }, 0) || 0;
 
-  const totalPayablePaid = accountsPayable?.filter(a => a.status === 'paid').reduce((sum, acc) => {
+  const totalPayablePaid = filteredAccountsPayable.filter(a => a.status === 'paid').reduce((sum, acc) => {
     const amt = parseFloat(acc.amount) || 0;
     const fees = parseFloat(acc.lateFees as string) || 0;
     const disc = parseFloat(acc.discount as string) || 0;
     return sum + (amt + fees - disc);
   }, 0) || 0;
 
-  const totalReceivableReceived = accountsReceivable?.filter(a => a.status === 'received').reduce((sum, acc) => {
+  const totalReceivableReceived = filteredAccountsReceivable.filter(a => a.status === 'received').reduce((sum, acc) => {
     const amt = parseFloat(acc.amount) || 0;
     const disc = parseFloat(acc.discount as string) || 0;
     return sum + (amt - disc);
   }, 0) || 0;
 
-  const totalPayableOverdue = accountsPayable?.filter(a => a.status === 'overdue').reduce((sum, acc) => {
+  const totalPayableOverdue = filteredAccountsPayable.filter(a => a.status === 'overdue').reduce((sum, acc) => {
     const amt = parseFloat(acc.amount) || 0;
     const fees = parseFloat(acc.lateFees as string) || 0;
     const disc = parseFloat(acc.discount as string) || 0;
     return sum + (amt + fees - disc);
   }, 0) || 0;
 
-  const totalReceivableOverdue = accountsReceivable?.filter(a => a.status === 'overdue').reduce((sum, acc) => {
+  const totalReceivableOverdue = filteredAccountsReceivable.filter(a => a.status === 'overdue').reduce((sum, acc) => {
     const amt = parseFloat(acc.amount) || 0;
     const disc = parseFloat(acc.discount as string) || 0;
     return sum + (amt - disc);
   }, 0) || 0;
-
   const totalManualPendingIncome = filteredCashFlowEntries.filter(e => e.type === 'income' && e.status === 'pending').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) || 0;
   const totalManualPendingExpense = filteredCashFlowEntries.filter(e => e.type === 'expense' && e.status === 'pending').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) || 0;
 
@@ -333,6 +352,89 @@ export default function CashFlow() {
                   ))}
                 </SelectContent>
               </Select>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full sm:w-40 h-12 rounded-2xl bg-background border-primary/20 hover:bg-primary/10 focus:ring-primary justify-start">
+                    <Filter className="h-4 w-4 mr-2 text-primary" />
+                    {selectedStatuses.includes('all') 
+                      ? 'Todos os Status' 
+                      : `${selectedStatuses.length} selecionado${selectedStatuses.length > 1 ? 's' : ''}`
+                    }
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 rounded-2xl border-primary/20">
+                  <DropdownMenuItem onClick={() => setSelectedStatuses(['all'])} className="cursor-pointer">
+                    <Checkbox checked={selectedStatuses.includes('all')} className="mr-2" />
+                    Todos os Status
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    if (selectedStatuses.includes('all')) {
+                      setSelectedStatuses(['pending']);
+                    } else {
+                      const newStatuses = selectedStatuses.includes('pending')
+                        ? selectedStatuses.filter(s => s !== 'pending')
+                        : [...selectedStatuses, 'pending'];
+                      setSelectedStatuses(newStatuses.length === 0 ? ['all'] : newStatuses);
+                    }
+                  }} className="cursor-pointer">
+                    <Checkbox checked={selectedStatuses.includes('pending')} className="mr-2" />
+                    Pendente
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    if (selectedStatuses.includes('all')) {
+                      setSelectedStatuses(['paid']);
+                    } else {
+                      const newStatuses = selectedStatuses.includes('paid')
+                        ? selectedStatuses.filter(s => s !== 'paid')
+                        : [...selectedStatuses, 'paid'];
+                      setSelectedStatuses(newStatuses.length === 0 ? ['all'] : newStatuses);
+                    }
+                  }} className="cursor-pointer">
+                    <Checkbox checked={selectedStatuses.includes('paid')} className="mr-2" />
+                    Pago
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    if (selectedStatuses.includes('all')) {
+                      setSelectedStatuses(['received']);
+                    } else {
+                      const newStatuses = selectedStatuses.includes('received')
+                        ? selectedStatuses.filter(s => s !== 'received')
+                        : [...selectedStatuses, 'received'];
+                      setSelectedStatuses(newStatuses.length === 0 ? ['all'] : newStatuses);
+                    }
+                  }} className="cursor-pointer">
+                    <Checkbox checked={selectedStatuses.includes('received')} className="mr-2" />
+                    Recebido
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    if (selectedStatuses.includes('all')) {
+                      setSelectedStatuses(['overdue']);
+                    } else {
+                      const newStatuses = selectedStatuses.includes('overdue')
+                        ? selectedStatuses.filter(s => s !== 'overdue')
+                        : [...selectedStatuses, 'overdue'];
+                      setSelectedStatuses(newStatuses.length === 0 ? ['all'] : newStatuses);
+                    }
+                  }} className="cursor-pointer">
+                    <Checkbox checked={selectedStatuses.includes('overdue')} className="mr-2" />
+                    Vencido
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    if (selectedStatuses.includes('all')) {
+                      setSelectedStatuses(['confirmed']);
+                    } else {
+                      const newStatuses = selectedStatuses.includes('confirmed')
+                        ? selectedStatuses.filter(s => s !== 'confirmed')
+                        : [...selectedStatuses, 'confirmed'];
+                      setSelectedStatuses(newStatuses.length === 0 ? ['all'] : newStatuses);
+                    }
+                  }} className="cursor-pointer">
+                    <Checkbox checked={selectedStatuses.includes('confirmed')} className="mr-2" />
+                    Confirmado
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -576,7 +678,11 @@ export default function CashFlow() {
                   categoryName: categories?.find(c => c.id === entry.categoryId)?.name || 'Varejo',
                   isManual: true,
                 })) || [])
-              ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+              ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+              .filter(transaction => {
+                if (selectedStatuses.includes('all')) return true;
+                return selectedStatuses.includes(transaction.status);
+              });
 
               if (receivableLoading || payableLoading || cashFlowLoading) {
                 return (

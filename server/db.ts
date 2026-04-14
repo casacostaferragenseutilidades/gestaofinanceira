@@ -2,20 +2,6 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
 
-// No Vercel/Netlify, as variáveis de ambiente já são injetadas automaticamente.
-// dotenv só é necessário localmente. O import estático foi removido para evitar
-// falhas no ambiente serverless onde não existe arquivo .env.
-if (!process.env.VERCEL && !process.env.NETLIFY) {
-  try {
-    // Tentativa opcional de carregar dotenv no ambiente local
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    // @ts-ignore
-    require("dotenv").config();
-  } catch {
-    // É ok se falhar — as variáveis já podem estar no ambiente
-  }
-}
-
 const connectionString = process.env.DATABASE_URL || "";
 
 let pool: pg.Pool | null = null;
@@ -30,9 +16,15 @@ if (connectionString) {
     pool = new pg.Pool({
       connectionString: connectionString,
       ssl: { rejectUnauthorized: false },
-      max: 5, // Reduzido para serverless (evitar exceder limite de conexões)
-      idleTimeoutMillis: 10000, // Fechar conexões inativas após 10s
-      connectionTimeoutMillis: 8000, // 8s para conectar
+      max: 3, // Reduzido para serverless (evitar exceder limite de conexões)
+      min: 1, // Manter pelo menos 1 conexão
+      idleTimeoutMillis: 30000, // Fechar conexões inativas após 30s
+      connectionTimeoutMillis: 10000, // 10s para conectar
+      acquireTimeoutMillis: 60000, // 60s para adquirir conexão do pool
+      createTimeoutMillis: 30000, // 30s para criar nova conexão
+      destroyTimeoutMillis: 5000, // 5s para destruir conexão
+      reapIntervalMillis: 1000, // Verificar conexões idle a cada 1s
+      createRetryIntervalMillis: 200, // Retry rápido para criar conexões
     });
 
     pool.on("error", (err) => {

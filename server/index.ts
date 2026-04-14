@@ -48,12 +48,37 @@ let initError: Error | null = null;
 let initPromise: Promise<void> | null = null;
 
 // Diagnostic health-check route (always available, before init middleware)
-app.get("/api/health-check", (req, res) => {
+app.get("/api/health-check", async (req, res) => {
+  let dbStatus = "unknown";
+  try {
+    if (isInitialized) {
+      const { db } = await import("./db");
+      if (db) {
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`SELECT 1`);
+        dbStatus = "connected";
+      } else {
+        dbStatus = "null - DATABASE_URL missing or invalid";
+      }
+    } else {
+      dbStatus = "not yet initialized";
+    }
+  } catch (e: any) {
+    dbStatus = `error: ${e.message}`;
+  }
+
   res.json({
     status: "alive",
     isInitialized,
     hasError: !!initError,
     error: initError?.message,
+    dbStatus,
+    env: {
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      hasSessionSecret: !!process.env.SESSION_SECRET,
+      nodeEnv: process.env.NODE_ENV,
+      isVercel: !!process.env.VERCEL,
+    },
     time: new Date().toISOString(),
   });
 });
@@ -73,7 +98,20 @@ async function ensureInitialized() {
         const routesModule = await import("./routes");
         const { registerRoutes } = routesModule;
 
-        // 1. Initialize Database Schema (skip heavy init on serverless)
+        // 1. Verificar se o banco de dados está disponível
+        log("Checking database availability...");
+        const { db } = await import("./db");
+        if (!db) {
+          const errMsg = `DATABASE_URL não está configurada ou a conexão falhou. Verifique as variáveis de ambiente no Vercel.`;
+          log(`❌ ${errMsg}`);
+          // Não jogar um erro — registrar mas continuar para que auth e rotas sejam registradas
+          // Assim o health-check ainda funciona e mostra o diagnóstico correto
+          console.error("[Init] DB is null — all database operations will fail!");
+        } else {
+          log("✓ Database module loaded");
+        }
+
+        // 2. Initialize Database Schema (skip heavy init on serverless)
         try {
           if (process.env.VERCEL || process.env.NETLIFY) {
             log("Serverless env: skipping heavy DB init on boot.");
