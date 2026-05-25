@@ -16,15 +16,9 @@ if (connectionString) {
     pool = new pg.Pool({
       connectionString: connectionString,
       ssl: { rejectUnauthorized: false },
-      max: 3, // Reduzido para serverless (evitar exceder limite de conexões)
-      min: 1, // Manter pelo menos 1 conexão
+      max: 5, // Limite para evitar esgotar conexões do Supabase em serverless
       idleTimeoutMillis: 30000, // Fechar conexões inativas após 30s
-      connectionTimeoutMillis: 10000, // 10s para conectar
-      acquireTimeoutMillis: 60000, // 60s para adquirir conexão do pool
-      createTimeoutMillis: 30000, // 30s para criar nova conexão
-      destroyTimeoutMillis: 5000, // 5s para destruir conexão
-      reapIntervalMillis: 1000, // Verificar conexões idle a cada 1s
-      createRetryIntervalMillis: 200, // Retry rápido para criar conexões
+      connectionTimeoutMillis: 10000, // 10s timeout de conexão
     });
 
     pool.on("error", (err) => {
