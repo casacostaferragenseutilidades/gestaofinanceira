@@ -92,6 +92,24 @@ interface CashFlowEntry {
   categoryId?: string;
 }
 
+interface RetailSale {
+  id: string;
+  date: string;
+  type: 'income' | 'expense';
+  description: string;
+  amount: string;
+  paymentMethod: string;
+  account: string;
+  categoryId?: string;
+  clientName?: string;
+  document?: string;
+  costCenter?: string;
+  notes?: string;
+  status: 'confirmed' | 'cancelled';
+  companyId?: string;
+  cashFlowEntryId?: string;
+}
+
 export default function CashFlow() {
   console.log("[DEBUG] CashFlow component montado!");
   const queryClient = useQueryClient();
@@ -155,6 +173,12 @@ export default function CashFlow() {
     queryFn: getQueryFn({ on401: "throw" }),
   });
 
+  // Buscar vendas de varejo
+  const { data: retailSales, isLoading: retailSalesLoading } = useQuery<RetailSale[]>({
+    queryKey: ["/api/retail-sales", { companyId: selectedCompanyId === "all" ? undefined : selectedCompanyId }],
+    queryFn: getQueryFn({ on401: "throw" }),
+  });
+
   // Buscar categorias para nomes
   const { data: categories } = useQuery<any[]>({
     queryKey: ["/api/categories"],
@@ -167,6 +191,12 @@ export default function CashFlow() {
     return cashFlowEntries.filter(e => e.date >= startDate && e.date <= endDate);
   }, [cashFlowEntries, startDate, endDate]);
 
+  // Filtrar vendas de varejo pelo período selecionado
+  const filteredRetailSalesPeriod = React.useMemo(() => {
+    if (!retailSales) return [];
+    return retailSales.filter(s => s.date >= startDate && s.date <= endDate && s.status === 'confirmed');
+  }, [retailSales, startDate, endDate]);
+
   // Função para filtrar com base nos status selecionados
   const filterByStatus = (items: any[], statusField: string = 'status') => {
     if (selectedStatuses.includes('all')) return items;
@@ -177,6 +207,7 @@ export default function CashFlow() {
   const filteredAccountsPayable = filterByStatus(accountsPayable || [], 'status');
   const filteredAccountsReceivable = filterByStatus(accountsReceivable || [], 'status');
   const filteredCashFlowEntries = filterByStatus(filteredCashFlowEntriesPeriod, 'status');
+  const filteredRetailSales = filteredRetailSalesPeriod; // Vendas de varejo sempre são 'confirmed' quando ativas
 
   // Calcular totais
   const totalReceivable = filteredAccountsReceivable.reduce((sum, acc) => {
@@ -195,6 +226,10 @@ export default function CashFlow() {
   // Incluir movimentações manuais nos totais (já filtradas)
   const totalManualIncome = filteredCashFlowEntries.filter(e => e.type === 'income').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) || 0;
   const totalManualExpense = filteredCashFlowEntries.filter(e => e.type === 'expense').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) || 0;
+
+  // Incluir vendas de varejo nos totais
+  const totalRetailIncome = filteredRetailSales.filter(s => s.type === 'income').reduce((sum, s) => sum + parseFloat(s.amount?.toString() || "0"), 0) || 0;
+  const totalRetailExpense = filteredRetailSales.filter(s => s.type === 'expense').reduce((sum, s) => sum + parseFloat(s.amount?.toString() || "0"), 0) || 0;
 
   // Cálculos específicos por status (para cards específicos)
   const totalPayablePending = filteredAccountsPayable.filter(a => a.status === 'pending').reduce((sum, acc) => {
@@ -238,7 +273,7 @@ export default function CashFlow() {
   const totalManualPendingIncome = filteredCashFlowEntries.filter(e => e.type === 'income' && e.status === 'pending').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) || 0;
   const totalManualPendingExpense = filteredCashFlowEntries.filter(e => e.type === 'expense' && e.status === 'pending').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) || 0;
 
-  const balance = (totalReceivable + totalManualIncome) - (totalPayable + totalManualExpense);
+  const balance = (totalReceivable + totalManualIncome + totalRetailIncome) - (totalPayable + totalManualExpense + totalRetailExpense);
   const balancePending = totalReceivablePending - totalPayablePending + totalManualPendingIncome - totalManualPendingExpense;
 
   const getStatusColor = (status: string) => {
@@ -448,10 +483,10 @@ export default function CashFlow() {
                 <div>
                   <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Entradas</p>
                   <div className="text-2xl font-black tracking-tight mb-2">
-                    {receivableLoading || cashFlowLoading ? (
+                    {receivableLoading || cashFlowLoading || retailSalesLoading ? (
                       <Skeleton className="h-8 w-24 bg-white/20" />
                     ) : (
-                      formatCurrency(totalReceivable + totalManualIncome)
+                      formatCurrency(totalReceivable + totalManualIncome + totalRetailIncome)
                     )}
                   </div>
                 </div>
@@ -461,7 +496,7 @@ export default function CashFlow() {
               </div>
               <div className="flex items-center gap-2 text-white/50 text-[10px] font-bold">
                 <Activity className="h-3 w-3" />
-                <span>{(accountsReceivable?.length || 0) + filteredCashFlowEntries.filter(e => e.type === 'income').length} Movimentos</span>
+                <span>{(accountsReceivable?.length || 0) + filteredCashFlowEntries.filter(e => e.type === 'income').length + filteredRetailSales.filter(s => s.type === 'income').length} Movimentos</span>
               </div>
             </CardContent>
           </Card>
@@ -473,10 +508,10 @@ export default function CashFlow() {
                 <div>
                   <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Saídas</p>
                   <div className="text-2xl font-black tracking-tight mb-2">
-                    {payableLoading || cashFlowLoading ? (
+                    {payableLoading || cashFlowLoading || retailSalesLoading ? (
                       <Skeleton className="h-8 w-24 bg-white/20" />
                     ) : (
-                      formatCurrency(totalPayable + totalManualExpense)
+                      formatCurrency(totalPayable + totalManualExpense + totalRetailExpense)
                     )}
                   </div>
                 </div>
@@ -486,7 +521,7 @@ export default function CashFlow() {
               </div>
               <div className="flex items-center gap-2 text-white/50 text-[10px] font-bold">
                 <Activity className="h-3 w-3" />
-                <span>{(accountsPayable?.length || 0) + filteredCashFlowEntries.filter(e => e.type === 'expense').length} Movimentos</span>
+                <span>{(accountsPayable?.length || 0) + filteredCashFlowEntries.filter(e => e.type === 'expense').length + filteredRetailSales.filter(s => s.type === 'expense').length} Movimentos</span>
               </div>
             </CardContent>
           </Card>
@@ -498,10 +533,10 @@ export default function CashFlow() {
                 <div>
                   <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Pendente (In)</p>
                   <div className="text-2xl font-black tracking-tight mb-2">
-                    {receivableLoading || cashFlowLoading ? (
+                    {receivableLoading || cashFlowLoading || retailSalesLoading ? (
                       <Skeleton className="h-8 w-24 bg-white/20" />
                     ) : (
-                      formatCurrency(totalReceivablePending + filteredCashFlowEntries.filter(e => e.type === 'income' && e.status === 'pending').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0))
+                      formatCurrency(totalReceivablePending + filteredCashFlowEntries.filter(e => e.type === 'income' && e.status === 'pending').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) + filteredRetailSales.filter(s => s.type === 'income').reduce((sum, s) => sum + parseFloat(s.amount?.toString() || "0"), 0))
                     )}
                   </div>
                 </div>
@@ -520,10 +555,10 @@ export default function CashFlow() {
                 <div>
                   <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Pendente (Out)</p>
                   <div className="text-2xl font-black tracking-tight mb-2">
-                    {payableLoading || cashFlowLoading ? (
+                    {payableLoading || cashFlowLoading || retailSalesLoading ? (
                       <Skeleton className="h-8 w-24 bg-white/20" />
                     ) : (
-                      formatCurrency(totalPayablePending + filteredCashFlowEntries.filter(e => e.type === 'expense' && e.status === 'pending').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0))
+                      formatCurrency(totalPayablePending + filteredCashFlowEntries.filter(e => e.type === 'expense' && e.status === 'pending').reduce((sum, e) => sum + parseFloat(e.amount?.toString() || "0"), 0) + filteredRetailSales.filter(s => s.type === 'expense').reduce((sum, s) => sum + parseFloat(s.amount?.toString() || "0"), 0))
                     )}
                   </div>
                 </div>
@@ -545,7 +580,7 @@ export default function CashFlow() {
                 <div>
                   <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Líquido</p>
                   <div className="text-2xl font-black tracking-tight mb-2">
-                    {receivableLoading || payableLoading || cashFlowLoading ? (
+                    {receivableLoading || payableLoading || cashFlowLoading || retailSalesLoading ? (
                       <Skeleton className="h-8 w-24 bg-white/20" />
                     ) : (
                       formatCurrency(balance)
@@ -570,10 +605,10 @@ export default function CashFlow() {
                 <div>
                   <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Projeção</p>
                   <div className="text-2xl font-black tracking-tight mb-2">
-                    {receivableLoading || payableLoading || cashFlowLoading ? (
+                    {receivableLoading || payableLoading || cashFlowLoading || retailSalesLoading ? (
                       <Skeleton className="h-8 w-24 bg-white/20" />
                     ) : (
-                      formatCurrency(balancePending + filteredCashFlowEntries.filter(e => e.status === 'pending').reduce((sum, e) => sum + (e.type === 'income' ? parseFloat(e.amount?.toString() || "0") : -parseFloat(e.amount?.toString() || "0")), 0))
+                      formatCurrency(balancePending + filteredCashFlowEntries.filter(e => e.status === 'pending').reduce((sum, e) => sum + (e.type === 'income' ? parseFloat(e.amount?.toString() || "0") : -parseFloat(e.amount?.toString() || "0")), 0) + filteredRetailSales.reduce((sum, s) => sum + (s.type === 'income' ? parseFloat(s.amount?.toString() || "0") : -parseFloat(s.amount?.toString() || "0")), 0))
                     )}
                   </div>
                 </div>
@@ -677,14 +712,30 @@ export default function CashFlow() {
                   companyId: '', // Varejo
                   categoryName: categories?.find(c => c.id === entry.categoryId)?.name || 'Varejo',
                   isManual: true,
+                })) || []),
+                ...(filteredRetailSales?.map(sale => ({
+                  id: sale.id,
+                  type: sale.type === 'income' ? 'receivable' as const : 'payable' as const,
+                  date: sale.date,
+                  description: sale.description,
+                  amount: parseFloat(sale.amount || '0'),
+                  status: 'paid',
+                  companyId: sale.companyId || '',
+                  categoryName: categories?.find(c => c.id === sale.categoryId)?.name || 'Varejo',
+                  isManual: true,
+                  isRetail: true,
                 })) || [])
               ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
               .filter(transaction => {
+                // Aplicar o filtro de data para não exibir contas atrasadas de meses anteriores na tabela
+                const inRange = transaction.date >= startDate && transaction.date <= endDate;
+                if (!inRange) return false;
+
                 if (selectedStatuses.includes('all')) return true;
                 return selectedStatuses.includes(transaction.status);
               });
 
-              if (receivableLoading || payableLoading || cashFlowLoading) {
+              if (receivableLoading || payableLoading || cashFlowLoading || retailSalesLoading) {
                 return (
                   <div className="p-10 space-y-6">
                     {Array.from({ length: 5 }).map((_, i) => (
@@ -742,8 +793,11 @@ export default function CashFlow() {
                                   <div className="text-sm font-black text-foreground tracking-tight line-clamp-1">{transaction.description}</div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-[10px] font-bold text-muted-foreground uppercase">{empresa?.nome || 'Geral'}</span>
-                                    {('isManual' in transaction && transaction.isManual) && (
-                                      <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary text-[9px] font-black h-4 px-1">VAREJO</Badge>
+                                    {('isRetail' in transaction && transaction.isRetail) && (
+                                      <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/5 text-emerald-600 text-[9px] font-black h-4 px-1">VENDA VAREJO</Badge>
+                                    )}
+                                    {('isManual' in transaction && transaction.isManual && !('isRetail' in transaction)) && (
+                                      <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary text-[9px] font-black h-4 px-1">MANUAL</Badge>
                                     )}
                                   </div>
                                 </div>
@@ -823,7 +877,7 @@ export default function CashFlow() {
                 </Button>
                 <div className="text-right border-l pl-6 border-emerald-500/10">
                   <p className="text-3xl font-black text-emerald-600 tracking-tighter leading-none">
-                    {cashFlowEntries?.length || 0}
+                    {(cashFlowEntries?.length || 0) + (retailSales?.length || 0)}
                   </p>
                   <p className="text-[10px] text-emerald-500/60 font-black uppercase tracking-widest mt-1">Registros</p>
                 </div>

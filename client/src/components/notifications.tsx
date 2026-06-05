@@ -114,9 +114,17 @@ export function Notifications() {
                                             <div className="flex items-center justify-between mt-2">
                                                 <span className="text-[11px] text-muted-foreground">
                                                     {(() => {
-                                                        const [year, month, day] = alert.date.split('-').map(Number);
-                                                        const dateObj = new Date(year, month - 1, day);
-                                                        return format(dateObj, "dd/MM/yyyy", { locale: ptBR });
+                                                        if (!alert.date) return "Data indefinida";
+                                                        try {
+                                                            const parts = alert.date.split('-');
+                                                            if (parts.length !== 3) return alert.date;
+                                                            const [year, month, day] = parts.map(Number);
+                                                            const dateObj = new Date(year, month - 1, day);
+                                                            if (isNaN(dateObj.getTime())) return alert.date;
+                                                            return format(dateObj, "dd/MM/yyyy", { locale: ptBR });
+                                                        } catch (e) {
+                                                            return alert.date;
+                                                        }
                                                     })()}
                                                 </span>
                                                 <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all transform translate-x-1" />

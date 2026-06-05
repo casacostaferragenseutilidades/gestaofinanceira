@@ -1104,8 +1104,7 @@ export function registerRoutes(
         return res.status(401).json({ error: "Usuário não autenticado" });
       }
 
-      // Vendas de varejo são independentes de empresa - companyId vazio
-      const companyId = ''; // Varejo não tem empresa associada
+      const companyId = req.headers['x-company-id'] as string || undefined;
       const type = req.body.type || 'income';
 
       // Create the retail sale
@@ -1121,7 +1120,7 @@ export function registerRoutes(
         description: `${type === 'income' ? 'Venda' : 'Despesa'}: ${sale.description}`,
         type: type,
         amount: parseFloat(sale.amount.toString()),
-        companyId: '' // Varejo não tem empresa
+        companyId
       });
 
       const cashFlowEntry = await storage.createCashFlowEntry({
@@ -1137,7 +1136,7 @@ export function registerRoutes(
         document: sale.document,
         costCenter: sale.costCenter,
         userId,
-        companyId: '', // Varejo não tem empresa
+        companyId,
       });
 
       console.log(`[DEBUG] Cash flow entry created:`, cashFlowEntry);
@@ -1209,5 +1208,20 @@ export function registerRoutes(
     }
   });
 
+  // Retail Sales Summary (Total)
+  app.get("/api/retail-sales/summary", requireViewer, async (req, res) => {
+    try {
+      let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+      if (Array.isArray(companyId)) { companyId = companyId.includes('all') ? 'all' : companyId[0]; }
+      else if (typeof companyId === 'string' && companyId.includes(',')) { const parts = companyId.split(','); companyId = parts.includes('all') ? 'all' : parts[0]; }
+
+      const sales = await storage.getRetailSales(companyId);
+      const total = sales.reduce((sum, sale) => sum + parseFloat(sale.amount.toString()), 0);
+      res.json({ total, count: sales.length });
+    } catch (error: any) {
+      console.error("Error fetching retail sales summary:", error);
+      res.status(500).json({ error: "Erro ao buscar resumo de vendas", details: error.message });
+    }
+  });
   return httpServer;
 }

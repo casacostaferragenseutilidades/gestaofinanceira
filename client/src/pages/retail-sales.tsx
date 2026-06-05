@@ -88,11 +88,17 @@ export default function RetailSales() {
 
   // Filters
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [selectedMonth, setSelectedMonth] = React.useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
   const [startDateFilter, setStartDateFilter] = React.useState("");
   const [endDateFilter, setEndDateFilter] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState<"all" | "income" | "expense">("all");
   const [paymentMethodFilter, setPaymentMethodFilter] = React.useState("all");
   const [categoryFilter, setCategoryFilter] = React.useState("all");
+
+  // Calcular datas baseadas no mês e ano selecionados
+  const startDate = new Date(Date.UTC(selectedYear, selectedMonth, 1)).toISOString().split("T")[0];
+  const endDate = new Date(Date.UTC(selectedYear, selectedMonth + 1, 0)).toISOString().split("T")[0];
 
   // Form state
   const [formData, setFormData] = React.useState({
@@ -283,6 +289,11 @@ export default function RetailSales() {
     createCategoryMutation.mutate(categoryForm);
   };
 
+  const monthNames = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+
   // Filter sales
   const filteredSales = React.useMemo(() => {
     if (!sales) return [];
@@ -292,12 +303,13 @@ export default function RetailSales() {
         (sale.document?.toLowerCase() || "").includes(searchTerm.toLowerCase());
       const matchesStartDate = !startDateFilter || sale.date >= startDateFilter;
       const matchesEndDate = !endDateFilter || sale.date <= endDateFilter;
+      const matchesMonth = (startDateFilter || endDateFilter) ? true : (sale.date >= startDate && sale.date <= endDate);
       const matchesType = typeFilter === "all" || (sale as any).type === typeFilter || (!(sale as any).type && typeFilter === "income");
       const matchesPayment = paymentMethodFilter === "all" || sale.paymentMethod === paymentMethodFilter;
       const matchesCategory = categoryFilter === "all" || sale.categoryId === categoryFilter;
-      return matchesSearch && matchesStartDate && matchesEndDate && matchesType && matchesPayment && matchesCategory;
+      return matchesSearch && matchesStartDate && matchesEndDate && matchesMonth && matchesType && matchesPayment && matchesCategory;
     });
-  }, [sales, searchTerm, startDateFilter, endDateFilter, typeFilter, paymentMethodFilter, categoryFilter]);
+  }, [sales, searchTerm, startDateFilter, endDateFilter, startDate, endDate, typeFilter, paymentMethodFilter, categoryFilter]);
 
   // Calculate totals for dashboard
   const today = new Date().toISOString().split("T")[0];
@@ -312,11 +324,11 @@ export default function RetailSales() {
     .reduce((sum, s) => sum + parseFloat(s.amount.toString()), 0) || 0;
 
   const monthIncome = filteredSales
-    ?.filter((s) => s.date.startsWith(currentMonth) && ((s as any).type === "income" || !(s as any).type))
+    ?.filter((s) => ((s as any).type === "income" || !(s as any).type))
     .reduce((sum, s) => sum + parseFloat(s.amount.toString()), 0) || 0;
 
   const monthExpense = filteredSales
-    ?.filter((s) => s.date.startsWith(currentMonth) && (s as any).type === "expense")
+    ?.filter((s) => (s as any).type === "expense")
     .reduce((sum, s) => sum + parseFloat(s.amount.toString()), 0) || 0;
 
   const currentBalance = monthIncome - monthExpense;
@@ -326,13 +338,18 @@ export default function RetailSales() {
     return [...(filteredSales || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
   }, [filteredSales]);
 
-  // Chart data - daily movements for current month
+  // Chart data - daily movements for selected month
   const dailyChartData = React.useMemo(() => {
     if (!filteredSales) return [];
-    const daysInMonth = new Date(parseInt(currentMonth.split("-")[0]), parseInt(currentMonth.split("-")[1]), 0).getDate();
+    
+    // Use selected month/year for the chart if no specific date range is set, otherwise default to current month for the chart
+    const targetMonth = (startDateFilter || endDateFilter) ? currentMonth : `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
+    const [yearStr, monthStr] = targetMonth.split("-");
+    const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
+    
     const data = [];
     for (let day = 1; day <= daysInMonth; day++) {
-      const dateStr = `${currentMonth}-${String(day).padStart(2, "0")}`;
+      const dateStr = `${targetMonth}-${String(day).padStart(2, "0")}`;
       const dayIncome = filteredSales
         .filter((s) => s.date === dateStr && ((s as any).type === "income" || !(s as any).type))
         .reduce((sum, s) => sum + parseFloat(s.amount.toString()), 0);
@@ -347,7 +364,7 @@ export default function RetailSales() {
       });
     }
     return data;
-  }, [filteredSales, currentMonth]);
+  }, [filteredSales, selectedMonth, selectedYear, startDateFilter, endDateFilter, currentMonth]);
 
   // Category chart data
   const categoryChartData = React.useMemo(() => {
@@ -437,22 +454,55 @@ export default function RetailSales() {
             Registre entradas e saídas avulsas. Elas aparecerão automaticamente no fluxo de caixa.
           </p>
         </div>
-        <div className="flex flex-wrap gap-4 w-full lg:w-auto">
-          <Button
-            onClick={() => setIsCategoryDialogOpen(true)}
-            variant="outline"
-            className="h-14 px-8 rounded-2xl border-2 hover:bg-slate-50 transition-all font-bold group"
-          >
-            <Tag className="h-5 w-5 mr-2 text-slate-400 group-hover:text-primary transition-colors" />
-            Categorias
-          </Button>
-          <Button
-            onClick={() => handleOpenDialog()}
-            className="h-14 px-8 rounded-2xl bg-gradient-to-r from-primary to-violet-700 hover:scale-105 transition-all shadow-xl shadow-primary/20 font-black tracking-tighter text-lg"
-          >
-            <Plus className="h-6 w-6 mr-2" />
-            Nova Movimentação
-          </Button>
+        <div className="flex flex-col sm:flex-row flex-wrap gap-4 w-full lg:w-auto items-stretch sm:items-center">
+          <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-900/50 p-1.5 rounded-[1.25rem] shadow-sm border border-slate-200 w-full sm:w-auto overflow-hidden">
+            <Select value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(parseInt(value))}>
+              <SelectTrigger className="h-11 flex-1 sm:flex-none sm:w-[140px] border-0 bg-transparent focus:ring-0 font-bold shadow-none truncate">
+                <Calendar className="h-4 w-4 mr-2 text-primary shrink-0" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl shadow-xl">
+                {monthNames.map((month, index) => (
+                  <SelectItem key={index} value={index.toString()}>
+                    {month}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="w-px h-6 bg-slate-200 shrink-0" />
+
+            <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
+              <SelectTrigger className="h-11 flex-1 sm:flex-none sm:w-[90px] border-0 bg-transparent focus:ring-0 font-bold shadow-none truncate">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl shadow-xl">
+                {[2024, 2025, 2026, 2027, 2028].map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex gap-3 w-full sm:w-auto">
+            <Button
+              onClick={() => setIsCategoryDialogOpen(true)}
+              variant="outline"
+              className="h-14 flex-1 sm:flex-none px-6 rounded-2xl border-2 hover:bg-slate-50 transition-all font-bold group"
+            >
+              <Tag className="h-5 w-5 mr-2 text-slate-400 group-hover:text-primary transition-colors" />
+              Categorias
+            </Button>
+            <Button
+              onClick={() => handleOpenDialog()}
+              className="h-14 flex-1 sm:flex-none px-6 rounded-2xl bg-gradient-to-r from-primary to-violet-700 hover:scale-[1.02] transition-all shadow-xl shadow-primary/20 font-black tracking-tighter text-lg whitespace-nowrap"
+            >
+              <Plus className="h-6 w-6 mr-1" />
+              Nova Mov.
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -499,7 +549,7 @@ export default function RetailSales() {
               <CardContent className="p-8 relative z-10 flex flex-col justify-between h-full space-y-4">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
-                    <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider opacity-80">Entradas Mês</p>
+                    <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider opacity-80">Entradas</p>
                     <p className="text-3xl font-black tracking-tighter text-emerald-600 dark:text-emerald-400">
                       {formatCurrency(monthIncome)}
                     </p>
@@ -516,7 +566,7 @@ export default function RetailSales() {
               <CardContent className="p-8 relative z-10 flex flex-col justify-between h-full space-y-4">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
-                    <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider opacity-80">Saídas Mês</p>
+                    <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider opacity-80">Saídas</p>
                     <p className="text-3xl font-black tracking-tighter text-rose-600 dark:text-rose-400">
                       -{formatCurrency(monthExpense)}
                     </p>
@@ -552,7 +602,7 @@ export default function RetailSales() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" />
-                  Fluxo de Caixa - Mês Atual
+                  Fluxo de Caixa - Diário
                 </CardTitle>
                 <CardDescription>Entradas e saídas por dia</CardDescription>
               </CardHeader>
@@ -686,6 +736,37 @@ export default function RetailSales() {
                   />
                 </div>
 
+                <div className="flex items-center gap-2 shrink-0 bg-white/50 dark:bg-slate-900/50 p-1.5 rounded-[1.25rem] shadow-sm border border-slate-200">
+                  <Select value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(parseInt(value))}>
+                    <SelectTrigger className="h-11 w-[140px] border-0 bg-transparent focus:ring-0 font-bold shadow-none">
+                      <Calendar className="h-4 w-4 mr-2 text-primary" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl shadow-xl">
+                      {monthNames.map((month, index) => (
+                        <SelectItem key={index} value={index.toString()}>
+                          {month}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="w-px h-6 bg-slate-200 mx-1" />
+
+                  <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
+                    <SelectTrigger className="h-11 w-[90px] border-0 bg-transparent focus:ring-0 font-bold shadow-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl shadow-xl">
+                      {[2024, 2025, 2026, 2027, 2028].map((year) => (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
                   <SelectTrigger className="h-14 min-w-[150px] bg-white/50 border-slate-200 rounded-2xl shadow-sm font-bold">
                     <SelectValue placeholder="Tipo" />
@@ -749,6 +830,8 @@ export default function RetailSales() {
                       setCategoryFilter("all");
                       setStartDateFilter("");
                       setEndDateFilter("");
+                      setSelectedMonth(new Date().getMonth());
+                      setSelectedYear(new Date().getFullYear());
                     }}
                     className="h-14 w-14 shrink-0 rounded-2xl hover:bg-rose-50 hover:text-rose-600 transition-colors"
                   >
@@ -842,8 +925,8 @@ export default function RetailSales() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="rounded-[2.5rem] border-0 shadow-2xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-xl overflow-hidden p-2">
               <CardHeader>
-                <CardTitle className="text-2xl font-black tracking-tighter">Relatório Mensal</CardTitle>
-                <CardDescription>Resumo de entradas e saídas do mês atual</CardDescription>
+                <CardTitle className="text-2xl font-black tracking-tighter">Relatório do Período</CardTitle>
+                <CardDescription>Resumo de entradas e saídas no período selecionado</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
