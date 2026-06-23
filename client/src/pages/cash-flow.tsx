@@ -204,8 +204,8 @@ export default function CashFlow() {
   };
 
   // Filtrar dados com base nos status selecionados
-  const filteredAccountsPayable = filterByStatus(accountsPayable || [], 'status');
-  const filteredAccountsReceivable = filterByStatus(accountsReceivable || [], 'status');
+  const filteredAccountsPayable = filterByStatus(accountsPayable || [], 'status').filter(acc => acc.dueDate >= startDate && acc.dueDate <= endDate);
+  const filteredAccountsReceivable = filterByStatus(accountsReceivable || [], 'status').filter(acc => acc.dueDate >= startDate && acc.dueDate <= endDate);
   const filteredCashFlowEntries = filterByStatus(filteredCashFlowEntriesPeriod, 'status');
   const filteredRetailSales = filteredRetailSalesPeriod; // Vendas de varejo sempre são 'confirmed' quando ativas
 
@@ -496,7 +496,7 @@ export default function CashFlow() {
               </div>
               <div className="flex items-center gap-2 text-white/50 text-[10px] font-bold">
                 <Activity className="h-3 w-3" />
-                <span>{(accountsReceivable?.length || 0) + filteredCashFlowEntries.filter(e => e.type === 'income').length + filteredRetailSales.filter(s => s.type === 'income').length} Movimentos</span>
+                <span>{filteredAccountsReceivable.length + filteredCashFlowEntries.filter(e => e.type === 'income').length + filteredRetailSales.filter(s => s.type === 'income').length} Movimentos</span>
               </div>
             </CardContent>
           </Card>
@@ -521,7 +521,7 @@ export default function CashFlow() {
               </div>
               <div className="flex items-center gap-2 text-white/50 text-[10px] font-bold">
                 <Activity className="h-3 w-3" />
-                <span>{(accountsPayable?.length || 0) + filteredCashFlowEntries.filter(e => e.type === 'expense').length + filteredRetailSales.filter(s => s.type === 'expense').length} Movimentos</span>
+                <span>{filteredAccountsPayable.length + filteredCashFlowEntries.filter(e => e.type === 'expense').length + filteredRetailSales.filter(s => s.type === 'expense').length} Movimentos</span>
               </div>
             </CardContent>
           </Card>
@@ -620,49 +620,6 @@ export default function CashFlow() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Alertas - Layout Melhorado */}
-        {(totalPayableOverdue > 0 || totalReceivableOverdue > 0) && (
-          <Card className="shadow-2xl shadow-rose-500/5 border-0 bg-gradient-to-br from-rose-50/50 to-amber-50/50 dark:from-rose-950/20 dark:to-amber-950/20 rounded-3xl overflow-hidden ring-1 ring-rose-500/10">
-            <CardHeader className="bg-rose-500/5 dark:bg-rose-500/10 border-b border-rose-500/10">
-              <CardTitle className="text-xl font-black flex items-center gap-3 text-rose-600 dark:text-rose-400">
-                <div className="p-2.5 bg-rose-500/10 rounded-xl">
-                  <AlertTriangle className="h-6 w-6" />
-                </div>
-                <div>
-                  <span className="tracking-tight">Alertas Críticos</span>
-                  <p className="text-[10px] text-rose-500/70 uppercase font-black tracking-widest mt-0.5">Ações Requeridas</p>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-5">
-              {totalPayableOverdue > 0 && (
-                <div className="flex items-center gap-5 p-5 bg-white/50 dark:bg-rose-900/10 rounded-2xl border border-rose-500/10 shadow-sm group hover:scale-[1.01] transition-transform">
-                  <div className="p-3.5 bg-rose-500/10 dark:bg-rose-500/20 rounded-2xl">
-                    <AlertCircle className="h-7 w-7 text-rose-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-black text-rose-500/60 uppercase tracking-widest">Contas a Pagar</p>
-                    <p className="text-2xl font-black text-foreground tracking-tight">{formatCurrency(totalPayableOverdue)} em atraso</p>
-                  </div>
-                  <Badge className="bg-rose-500 text-white font-black text-[10px] tracking-widest px-3 py-1 rounded-lg">URGENTE</Badge>
-                </div>
-              )}
-              {totalReceivableOverdue > 0 && (
-                <div className="flex items-center gap-5 p-5 bg-white/50 dark:bg-amber-900/10 rounded-2xl border border-amber-500/10 shadow-sm group hover:scale-[1.01] transition-transform">
-                  <div className="p-3.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-2xl">
-                    <AlertCircle className="h-7 w-7 text-amber-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-black text-amber-500/60 uppercase tracking-widest">Contas a Receber</p>
-                    <p className="text-2xl font-black text-foreground tracking-tight">{formatCurrency(totalReceivableOverdue)} em atraso</p>
-                  </div>
-                  <Badge className="bg-amber-500 text-white font-black text-[10px] tracking-widest px-3 py-1 rounded-lg">ATENÇÃO</Badge>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
 
         {/* Tabela Detalhada Combinada - Melhorada */}
         <Card className="shadow-2xl shadow-primary/5 border-0 rounded-3xl overflow-hidden bg-card">
@@ -850,210 +807,6 @@ export default function CashFlow() {
           </CardContent>
         </Card>
 
-        {/* Movimentações Manuais (Vendas Varejo) - Design Melhorado */}
-        <Card className="shadow-2xl shadow-primary/5 border-0 rounded-3xl overflow-hidden bg-gradient-to-br from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/10 dark:to-teal-950/10 group">
-          <CardHeader className="border-b border-emerald-500/10 py-8 px-10">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
-              <div className="flex items-center gap-5">
-                <div className="p-4 bg-emerald-500/10 rounded-2xl group-hover:bg-emerald-500/20 transition-colors">
-                  <TrendingUp className="h-7 w-7 text-emerald-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-2xl font-black tracking-tighter">Movimentações Manuais</CardTitle>
-                  <p className="text-[10px] text-emerald-600 uppercase font-black tracking-[0.2em] mt-1">Sincronização Varejo</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-6">
-                <Button
-                  onClick={() => {
-                    queryClient.invalidateQueries({ queryKey: ["/api/cash-flow/entries"] });
-                    queryClient.invalidateQueries({ queryKey: ["/api/retail-sales"] });
-                  }}
-                  variant="outline"
-                  className="h-12 px-6 rounded-2xl bg-white border-primary/20 hover:bg-primary/5 hover:border-primary/40 text-primary font-bold shadow-sm active:scale-95 transition-all"
-                >
-                  <Activity className="h-4 w-4 mr-2" />
-                  Atualizar Dados de Vendas
-                </Button>
-                <div className="text-right border-l pl-6 border-emerald-500/10">
-                  <p className="text-3xl font-black text-emerald-600 tracking-tighter leading-none">
-                    {(cashFlowEntries?.length || 0) + (retailSales?.length || 0)}
-                  </p>
-                  <p className="text-[10px] text-emerald-500/60 font-black uppercase tracking-widest mt-1">Registros</p>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-10">
-            {cashFlowLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}
-              </div>
-            ) : filteredCashFlowEntries && filteredCashFlowEntries.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredCashFlowEntries.map((entry) => {
-                  const categoryName = entry.categoryId ? categories?.find(c => c.id === entry.categoryId)?.name : null;
-                  return (
-                    <div key={entry.id} className="relative bg-white dark:bg-muted/10 p-6 rounded-3xl border border-primary/5 shadow-xl shadow-primary/5 hover:shadow-primary/10 hover:-translate-y-1 transition-all duration-300">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className={cn(
-                          "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase",
-                          entry.type === 'income' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'
-                        )}>
-                          {entry.type === 'income' ? 'Entrada' : 'Saída'}
-                        </div>
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-60 flex items-center gap-1.5">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(entry.date)}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-black text-foreground mb-1 line-clamp-1">{entry.description}</h4>
-                      {categoryName && (
-                        <div className="flex items-center gap-1.5 mt-2 mb-4">
-                          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase">{categoryName}</span>
-                        </div>
-                      )}
-                      <div className={cn(
-                        "text-2xl font-black tracking-tighter mt-auto",
-                        entry.type === 'income' ? 'text-emerald-600' : 'text-rose-600'
-                      )}>
-                        {entry.type === 'income' ? '+' : '-'}{formatCurrency(parseFloat((entry.amount || "0").toString()))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="p-5 bg-emerald-500/5 rounded-3xl mb-4">
-                  <TrendingUp className="h-10 w-10 text-emerald-500/40" />
-                </div>
-                <h4 className="text-lg font-black tracking-tight">Sem movimentações</h4>
-                <p className="text-xs text-muted-foreground font-medium max-w-[200px] mx-auto mt-2">Vendas manuais e lançamentos diretos aparecerão aqui.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Tabelas de Contas a Receber e Pagar Lado a Lado */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Contas a Receber - Melhorada */}
-          <Card className="shadow-2xl shadow-emerald-500/5 border-0 rounded-3xl overflow-hidden bg-card">
-            <CardHeader className="bg-emerald-500/5 border-b border-emerald-500/10">
-              <CardTitle className="flex items-center gap-3 text-xl font-black text-emerald-600">
-                <div className="p-2 bg-emerald-500/10 rounded-xl">
-                  <ArrowUpRight className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="tracking-tighter">Contas a Receber</span>
-                  <p className="text-[10px] text-emerald-500/70 uppercase font-black tracking-widest mt-0.5">Entradas Previstas</p>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {receivableLoading ? (
-                <div className="p-6 space-y-4">
-                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}
-                </div>
-              ) : accountsReceivable && accountsReceivable.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-b border-border/50 bg-emerald-500/5">
-                        <TableHead className="font-black text-[9px] uppercase tracking-widest px-6 py-3">Venc.</TableHead>
-                        <TableHead className="font-black text-[9px] uppercase tracking-widest px-6 py-3">Descrição</TableHead>
-                        <TableHead className="font-black text-[9px] uppercase tracking-widest px-6 py-3 text-right">Valor</TableHead>
-                        <TableHead className="font-black text-[9px] uppercase tracking-widest px-6 py-3">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {accountsReceivable.map((account) => (
-                        <TableRow key={account.id} className="border-b border-border/30 hover:bg-emerald-500/5 transition-colors">
-                          <TableCell className="px-6 py-4 text-xs font-bold text-muted-foreground">{formatDate(account.dueDate)}</TableCell>
-                          <TableCell className="px-6 py-4 text-sm font-black tracking-tight">{account.description}</TableCell>
-                          <TableCell className="px-6 py-4 text-right font-black text-emerald-600">{formatCurrency(parseFloat(account.amount))}</TableCell>
-                          <TableCell className="px-6 py-4">
-                            <div className={cn(
-                              "text-[9px] font-black uppercase px-2 py-0.5 rounded-full border w-fit shadow-xs",
-                              account.status === 'received' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-amber-50 border-amber-200 text-amber-600'
-                            )}>
-                              {getStatusLabel(account.status)}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <div className="py-16 text-center">
-                  <ArrowUpRight className="h-10 w-10 text-emerald-500/20 mx-auto mb-3" />
-                  <p className="text-xs font-black text-muted-foreground uppercase opacity-50 tracking-widest">Sem Receitas</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Contas a Pagar - Melhorada */}
-          <Card className="shadow-2xl shadow-rose-500/5 border-0 rounded-3xl overflow-hidden bg-card">
-            <CardHeader className="bg-rose-500/5 border-b border-rose-500/10">
-              <CardTitle className="flex items-center gap-3 text-xl font-black text-rose-600">
-                <div className="p-2 bg-rose-500/10 rounded-xl">
-                  <ArrowDownRight className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="tracking-tighter">Contas a Pagar</span>
-                  <p className="text-[10px] text-rose-500/70 uppercase font-black tracking-widest mt-0.5">Saídas Previstas</p>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {payableLoading ? (
-                <div className="p-6 space-y-4">
-                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}
-                </div>
-              ) : accountsPayable && accountsPayable.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-b border-border/50 bg-rose-500/5">
-                        <TableHead className="font-black text-[9px] uppercase tracking-widest px-6 py-3">Venc.</TableHead>
-                        <TableHead className="font-black text-[9px] uppercase tracking-widest px-6 py-3">Descrição</TableHead>
-                        <TableHead className="font-black text-[9px] uppercase tracking-widest px-6 py-3 text-right">Valor</TableHead>
-                        <TableHead className="font-black text-[9px] uppercase tracking-widest px-6 py-3">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {accountsPayable.map((account) => (
-                        <TableRow key={account.id} className="border-b border-border/30 hover:bg-rose-500/5 transition-colors">
-                          <TableCell className="px-6 py-4 text-xs font-bold text-muted-foreground">{formatDate(account.dueDate)}</TableCell>
-                          <TableCell className="px-6 py-4 text-sm font-black tracking-tight">{account.description}</TableCell>
-                          <TableCell className="px-6 py-4 text-right font-black text-rose-600">-{formatCurrency(parseFloat(account.amount) + (parseFloat(account.lateFees as string) || 0) - (parseFloat(account.discount as string) || 0))}</TableCell>
-                          <TableCell className="px-6 py-4">
-                            <div className={cn(
-                              "text-[9px] font-black uppercase px-2 py-0.5 rounded-full border w-fit shadow-xs",
-                              account.status === 'paid' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-rose-50 border-rose-200 text-rose-600'
-                            )}>
-                              {getStatusLabel(account.status)}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <div className="py-16 text-center">
-                  <ArrowDownRight className="h-10 w-10 text-rose-500/20 mx-auto mb-3" />
-                  <p className="text-xs font-black text-muted-foreground uppercase opacity-50 tracking-widest">Sem Despesas</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-
         {/* Resumo Visual Final */}
         <Card className="shadow-2xl shadow-primary/10 border-0 bg-gradient-to-br from-slate-900 to-indigo-950 rounded-[2.5rem] overflow-hidden">
           <CardContent className="p-12 text-white relative">
@@ -1071,22 +824,22 @@ export default function CashFlow() {
                 <div className="bg-white/5 backdrop-blur-md p-8 rounded-3xl border border-white/10 flex flex-col items-center">
                   <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-3">Total Receitas</p>
                   <div className="text-3xl font-black text-emerald-400 tracking-tighter">
-                    {formatCurrency(totalReceivable + totalManualIncome)}
+                    {formatCurrency(totalReceivable + totalManualIncome + totalRetailIncome)}
                   </div>
                   <div className="mt-4 flex items-center gap-2 text-white/20 text-[10px] font-bold">
                     <CheckCircle className="h-3.5 w-3.5" />
-                    <span>{accountsReceivable?.length || 0} Contas Ativas</span>
+                    <span>{filteredAccountsReceivable.length} Contas no Período</span>
                   </div>
                 </div>
 
                 <div className="bg-white/5 backdrop-blur-md p-8 rounded-3xl border border-white/10 flex flex-col items-center">
                   <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-3">Total Despesas</p>
                   <div className="text-3xl font-black text-rose-400 tracking-tighter">
-                    {formatCurrency(totalPayable + totalManualExpense)}
+                    {formatCurrency(totalPayable + totalManualExpense + totalRetailExpense)}
                   </div>
                   <div className="mt-4 flex items-center gap-2 text-white/20 text-[10px] font-bold">
                     <AlertCircle className="h-3.5 w-3.5" />
-                    <span>{accountsPayable?.length || 0} Contas Ativas</span>
+                    <span>{filteredAccountsPayable.length} Contas no Período</span>
                   </div>
                 </div>
 

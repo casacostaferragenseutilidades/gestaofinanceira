@@ -962,6 +962,7 @@ export class DatabaseStorage implements IStorage {
       id: accountsReceivable.id,
       description: accountsReceivable.description,
       amount: accountsReceivable.amount,
+      saleDate: accountsReceivable.saleDate,
       dueDate: accountsReceivable.dueDate,
       originalDueDate: accountsReceivable.originalDueDate,
       receivedDate: accountsReceivable.receivedDate,

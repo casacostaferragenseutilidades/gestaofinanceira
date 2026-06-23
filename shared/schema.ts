@@ -124,6 +124,7 @@ export const accountsReceivable = pgTable("accounts_receivable", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   description: text("description").notNull(),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  saleDate: text("sale_date"),
   dueDate: text("due_date").notNull(),
   originalDueDate: text("original_due_date"), // Guarda a data original quando o recebimento ocorre em data diferente
   receivedDate: text("received_date"),

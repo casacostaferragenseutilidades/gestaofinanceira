@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -125,6 +125,10 @@ const accountPayableFormSchema = z.object({
   recurrenceEnd: z.string().optional(),
   installments: z.string().optional(),
   currentInstallment: z.string().optional(),
+  additionalInstallments: z.array(z.object({
+    amount: z.string().min(1, "Valor é obrigatório"),
+    dueDate: z.string().min(1, "Data de vencimento é obrigatória"),
+  })).optional(),
 });
 
 type AccountPayableFormData = z.infer<typeof accountPayableFormSchema>;
@@ -220,6 +224,7 @@ const KPICard = ({
 
 export default function AccountsPayable() {
   const [isOpen, setIsOpen] = React.useState(false);
+  const [showAdditionalInstallments, setShowAdditionalInstallments] = React.useState(false);
   // ... rest of the state ... (proxying for clarity in the tool call)
   const [editingAccount, setEditingAccount] = React.useState<AccountPayable | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -302,6 +307,11 @@ export default function AccountsPayable() {
       recurrence: "none",
       recurrenceEnd: "",
     },
+  });
+
+  const { fields: additionalInstallmentFields, append: appendInstallment, remove: removeInstallment } = useFieldArray({
+    control: form.control,
+    name: "additionalInstallments",
   });
 
   const paymentForm = useForm<PaymentFormData>({
@@ -520,11 +530,27 @@ export default function AccountsPayable() {
     },
   });
 
-  const handleSubmit = (data: AccountPayableFormData) => {
+  const handleSubmit = async (data: AccountPayableFormData) => {
     if (editingAccount) {
       updateMutation.mutate({ ...data, id: editingAccount.id });
     } else {
-      createMutation.mutate(data);
+      try {
+        await createMutation.mutateAsync(data);
+        if (data.additionalInstallments && data.additionalInstallments.length > 0) {
+          for (let i = 0; i < data.additionalInstallments.length; i++) {
+            const inst = data.additionalInstallments[i];
+            await createMutation.mutateAsync({
+              ...data,
+              amount: inst.amount,
+              dueDate: inst.dueDate,
+              description: `${data.description} (Parcela ${i + 2})`,
+              additionalInstallments: []
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao salvar parcelas", error);
+      }
     }
   };
 
@@ -650,6 +676,7 @@ export default function AccountsPayable() {
     if (!open) {
       setEditingAccount(null);
       form.reset();
+      setShowAdditionalInstallments(false);
     }
   };
 
@@ -1100,6 +1127,100 @@ export default function AccountsPayable() {
                         )}
                       />
                     </div>
+
+                    {/* Parcelas Adicionais UI */}
+                    {!editingAccount && (
+                      <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950 dark:to-amber-900 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100 flex items-center gap-2">
+                            <List className="h-5 w-5" />
+                            Parcelas Adicionais
+                          </h3>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={showAdditionalInstallments}
+                              onCheckedChange={(checked) => {
+                                setShowAdditionalInstallments(checked);
+                                if (!checked) {
+                                  form.setValue("additionalInstallments", []);
+                                } else if (additionalInstallmentFields.length === 0) {
+                                  appendInstallment({ amount: "", dueDate: "" });
+                                }
+                              }}
+                            />
+                            <Label className="text-orange-900 font-medium cursor-pointer" onClick={() => setShowAdditionalInstallments(!showAdditionalInstallments)}>Adicionar outras parcelas</Label>
+                          </div>
+                        </div>
+
+                        {showAdditionalInstallments && (
+                          <div className="space-y-4">
+                            {additionalInstallmentFields.map((field, index) => (
+                              <div key={field.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 bg-white/50 dark:bg-black/20 p-3 rounded-lg border border-orange-200/50">
+                                <div className="font-bold text-orange-900 w-24 shrink-0">
+                                  Parcela {index + 2}:
+                                </div>
+                                <FormField
+                                  control={form.control}
+                                  name={`additionalInstallments.${index}.amount`}
+                                  render={({ field }) => (
+                                    <FormItem className="flex-1 w-full">
+                                      <FormLabel className="text-xs text-orange-900 font-medium">Valor *</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          placeholder="0,00"
+                                          {...field}
+                                          className="bg-white border-orange-300 h-9"
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`additionalInstallments.${index}.dueDate`}
+                                  render={({ field }) => (
+                                    <FormItem className="flex-1 w-full">
+                                      <FormLabel className="text-xs text-orange-900 font-medium">Vencimento *</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="date"
+                                          {...field}
+                                          className="bg-white border-orange-300 h-9"
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeInstallment(index)}
+                                  className="text-rose-500 hover:text-rose-700 hover:bg-rose-100 mt-0 md:mt-6 shrink-0 self-end md:self-auto"
+                                  title="Remover Parcela"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => appendInstallment({ amount: "", dueDate: "" })}
+                              className="w-full border-orange-300 text-orange-700 hover:bg-orange-100 bg-white"
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Adicionar mais uma parcela
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <DialogFooter className="flex gap-3 pt-8 border-t border-slate-100 mt-8">
                       <Button
                         type="button"

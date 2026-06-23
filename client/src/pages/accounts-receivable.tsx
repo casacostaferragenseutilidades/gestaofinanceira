@@ -90,6 +90,7 @@ import type { AccountReceivable, Client, Category } from "@shared/schema";
 const accountReceivableFormSchema = z.object({
   description: z.string().min(1, "Descrição é obrigatória"),
   amount: z.string().min(1, "Valor é obrigatório"),
+  saleDate: z.string().optional(),
   dueDate: z.string().min(1, "Data de vencimento é obrigatória"),
   clientId: z.string().min(1, "Cliente é obrigatório"),
   categoryId: z.string().optional(),
@@ -350,6 +351,7 @@ export default function AccountsReceivable() {
     defaultValues: {
       description: "",
       amount: "",
+      saleDate: "",
       dueDate: "",
       clientId: "",
       categoryId: "",
@@ -540,6 +542,7 @@ export default function AccountsReceivable() {
     form.reset({
       description: account.description,
       amount: account.amount,
+      saleDate: account.saleDate || "",
       dueDate: account.dueDate,
       clientId: account.clientId || "",
       categoryId: account.categoryId || "",
@@ -580,6 +583,7 @@ export default function AccountsReceivable() {
     const clonedAccount = {
       description: `${account.description} (Cópia)`,
       amount: account.amount,
+      saleDate: account.saleDate || "",
       dueDate: account.dueDate,
       clientId: account.clientId || "",
       categoryId: account.categoryId || "",
@@ -707,12 +711,12 @@ export default function AccountsReceivable() {
                         <h3 className="text-lg font-bold tracking-tight">Informações do Lançamento</h3>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800">
                         <FormField
                           control={form.control}
                           name="description"
                           render={({ field }) => (
-                            <FormItem className="md:col-span-2">
+                            <FormItem className="md:col-span-3">
                               <FormLabel className="font-bold">Descrição do Recebível *</FormLabel>
                               <FormControl>
                                 <Input placeholder="Ex: Consultoria Técnica Mensal..." {...field} className="h-12 rounded-xl border-slate-200 bg-white" />
@@ -730,6 +734,20 @@ export default function AccountsReceivable() {
                               <FormLabel className="font-bold">Valor Total (R$) *</FormLabel>
                               <FormControl>
                                 <Input type="number" step="0.01" placeholder="0,00" {...field} className="h-12 rounded-xl border-slate-200 bg-white font-bold text-lg text-emerald-600" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="saleDate"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="font-bold">Data da Venda</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} className="h-12 rounded-xl border-slate-200 bg-white font-bold" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -1098,6 +1116,7 @@ export default function AccountsReceivable() {
                       </TableHead>
                       <TableHead className="font-bold text-slate-900 dark:text-slate-100">Descrição</TableHead>
                       <TableHead className="font-bold text-slate-900 dark:text-slate-100">Cliente</TableHead>
+                      <TableHead className="font-bold text-slate-900 dark:text-slate-100">Data Venda</TableHead>
                       <TableHead className="font-bold text-slate-900 dark:text-slate-100">Vencimento</TableHead>
                       <TableHead className="text-right font-bold text-slate-900 dark:text-slate-100">Valor</TableHead>
                       <TableHead className="text-right font-bold text-slate-900 dark:text-slate-100">Líquido</TableHead>
@@ -1138,6 +1157,12 @@ export default function AccountsReceivable() {
                                 <Users className="h-4 w-4 text-violet-600" />
                               </div>
                               <span className="font-medium">{client?.name || "Cliente não vinculado"}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2 text-sm font-bold">
+                              <Calendar className="h-4 w-4 text-slate-400" />
+                              {account.saleDate ? formatDate(account.saleDate) : "-"}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1188,6 +1213,12 @@ export default function AccountsReceivable() {
                                   <Pencil className="h-4 w-4 text-violet-500" /> Editar
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
+                                  onClick={() => handleClone(account)}
+                                  className="rounded-xl font-bold gap-3 py-3"
+                                >
+                                  <Copy className="h-4 w-4 text-slate-500" /> Clonar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
                                   onClick={() => deleteMutation.mutate(account.id)}
                                   disabled={account.status === "received"}
                                   className="rounded-xl font-bold gap-3 py-3 text-rose-600"
@@ -1231,6 +1262,9 @@ export default function AccountsReceivable() {
                               <DropdownMenuItem onClick={() => handleEdit(account)} className="rounded-xl font-bold gap-2">
                                 <Pencil className="h-4 w-4 text-violet-500" /> Editar
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleClone(account)} className="rounded-xl font-bold gap-2">
+                                <Copy className="h-4 w-4 text-slate-500" /> Clonar
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -1244,7 +1278,11 @@ export default function AccountsReceivable() {
                           </div>
                           <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
                             <Calendar className="h-4 w-4" />
-                            {formatDate(account.dueDate)}
+                            Venda: {account.saleDate ? formatDate(account.saleDate) : "-"}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
+                            <Calendar className="h-4 w-4" />
+                            Venc: {formatDate(account.dueDate)}
                           </div>
                         </div>
                         <div className="pt-4 border-t border-dashed border-slate-200 flex items-center justify-between">
