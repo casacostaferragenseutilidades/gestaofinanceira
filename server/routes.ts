@@ -267,6 +267,8 @@ export function registerRoutes(
 
   app.get("/api/auth/me", (req, res) => {
     try {
+      // Return immediately with session data from req.user (already loaded by passport deserialize)
+      // This avoids additional database queries
       console.log(`[Me API] Authenticated: ${req.isAuthenticated()}`);
       if (!req.isAuthenticated()) {
         return res.status(200).json({ user: null, authenticated: false });
@@ -279,11 +281,12 @@ export function registerRoutes(
           role: req.user!.role,
           status: req.user!.status,
           team: req.user!.team
-        }
+        },
+        authenticated: true
       });
     } catch (err: any) {
       console.error("[Me API] Error:", err);
-      res.status(500).json({ error: "Erro ao obter usuário atual", details: err.message, stack: err.stack });
+      res.status(500).json({ error: "Erro ao obter usuário atual", details: err.message });
     }
   });
 
