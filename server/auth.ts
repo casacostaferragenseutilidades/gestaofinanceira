@@ -57,7 +57,7 @@ declare global {
 export async function setupAuth(app: Express): Promise<void> {
   let sessionStore: any;
   try {
-    const usePgStore = false; // Forçar MemoryStore para evitar timeouts de conexão
+    const usePgStore = process.env.NODE_ENV === "production" || !!process.env.DATABASE_URL; // Usar PgStore em produção para suportar Serverless (Vercel)
 
     if (usePgStore) {
       console.log("[Auth] Attempting to use PostgreSQL session store...");
