@@ -56,6 +56,11 @@ let isInitialized = false;
 let initError: Error | null = null;
 let initPromise: Promise<void> | null = null;
 
+// Lightweight health route required by Render.com healthCheckPath
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString() });
+});
+
 // Diagnostic health-check route (always available, before init middleware)
 app.get("/api/health-check", async (req, res) => {
   let dbStatus = "unknown";
