@@ -4,14 +4,13 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, User, Loader2, StickyNote } from "lucide-react";
+import { LogOut, Loader2, StickyNote } from "lucide-react";
 import { Notifications } from "@/components/notifications";
 import { EmpresaSelector } from "@/components/EmpresaSelector";
 import Dashboard from "@/pages/dashboard";
@@ -78,18 +77,18 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" data-testid="button-user-menu">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+        <Button variant="ghost" size="icon" data-testid="button-user-menu" className="rounded-full">
+          <Avatar className="h-8 w-8 ring-2 ring-blue-100 ring-offset-1">
+            <AvatarFallback className="text-xs bg-gradient-to-br from-blue-600 to-blue-800 text-white font-bold">{initials}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem disabled className="flex flex-col items-start gap-0">
-          <span className="font-medium">{user.fullName || "Usuário"}</span>
-          <span className="text-xs text-muted-foreground">{user.team || user.role}</span>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuItem disabled className="flex flex-col items-start gap-0 opacity-100">
+          <span className="font-semibold text-slate-800">{user.fullName || "Usuário"}</span>
+          <span className="text-xs text-slate-400">{user.team || user.role}</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={logout} data-testid="button-logout">
+        <DropdownMenuItem onClick={logout} data-testid="button-logout" className="text-red-600 focus:text-red-600">
           <LogOut className="h-4 w-4 mr-2" />
           Sair
         </DropdownMenuItem>
@@ -103,8 +102,13 @@ function AuthenticatedApp() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-md">
+            <Loader2 className="h-5 w-5 animate-spin text-white" />
+          </div>
+          <p className="text-sm text-slate-400 font-medium">Carregando...</p>
+        </div>
       </div>
     );
   }
@@ -120,24 +124,24 @@ function AuthenticatedApp() {
 
   return (
     <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className="flex h-screen w-full bg-[#F8FAFC]">
         <AppSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-2 p-3 border-b bg-background sticky top-0 z-50">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className="flex items-center gap-2">
+          <header className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-200 bg-white shadow-sm sticky top-0 z-50">
+            <SidebarTrigger data-testid="button-sidebar-toggle" className="text-slate-500 hover:text-slate-800 hover:bg-slate-100" />
+            <div className="flex items-center gap-1.5">
               <EmpresaSelector />
               <Link href="/anotacoes">
-                <Button variant="ghost" size="icon" title="Anotações">
-                  <StickyNote className="h-[1.2rem] w-[1.2rem]" />
+                <Button variant="ghost" size="icon" title="Anotações" className="text-slate-500 hover:text-blue-600 hover:bg-blue-50">
+                  <StickyNote className="h-[1.1rem] w-[1.1rem]" />
                 </Button>
               </Link>
               <Notifications />
-              <ThemeToggle />
+              <div className="w-px h-5 bg-slate-200 mx-1" />
               <UserMenu />
             </div>
           </header>
-          <main className="flex-1 overflow-auto bg-muted/30">
+          <main className="flex-1 overflow-auto">
             <Router />
           </main>
         </div>
@@ -150,7 +154,7 @@ function App() {
   return (
     <ThemeProvider defaultTheme="light" storageKey="fincontrol-theme">
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
+        <TooltipProvider delayDuration={300}>
           <AuthProvider>
             <AuthenticatedApp />
             <Toaster />

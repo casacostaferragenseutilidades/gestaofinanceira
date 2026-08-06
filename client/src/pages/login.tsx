@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, Loader2, ArrowRight, ShieldCheck, PieChart, TrendingUp, Mail } from "lucide-react";
+import { DollarSign, Loader2, ArrowRight, ShieldCheck, PieChart, TrendingUp, BarChart3 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Login() {
@@ -56,13 +56,13 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background overflow-hidden font-sans">
-      {/* Visual Side (Hidden on Mobile) */}
-      <div className="hidden md:flex md:w-1/2 relative bg-primary items-center justify-center p-12 overflow-hidden">
-        <div
-          className="absolute inset-0 z-0 opacity-40 mix-blend-multiply bg-cover bg-center transition-transform hover:scale-110"
-          style={{ backgroundImage: "url('/login-bg.png')", transitionDuration: "10s" }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/80 via-primary/50 to-transparent z-10" />
+      {/* Visual Side */}
+      <div className="hidden md:flex md:w-1/2 relative items-center justify-center p-12 overflow-hidden bg-gradient-to-br from-blue-700 via-blue-800 to-blue-950">
+        {/* Padrão de fundo decorativo */}
+        <div className="absolute inset-0 opacity-10" style={{
+          backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(255,255,255,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.2) 0%, transparent 40%)'
+        }} />
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-blue-900/50 to-transparent" />
 
         <div className="relative z-20 max-w-lg text-white">
           <motion.div
@@ -70,38 +70,38 @@ export default function Login() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <div className="flex items-center gap-3 mb-8">
-              <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl border border-white/30 shadow-2xl">
-                <DollarSign className="h-10 w-10 text-white" />
+            <div className="flex items-center gap-3 mb-10">
+              <div className="p-3 bg-white/15 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl">
+                <TrendingUp className="h-9 w-9 text-white" />
               </div>
-              <h1 className="text-4xl font-bold tracking-tight">FinControl</h1>
+              <h1 className="text-3xl font-bold tracking-tight">FinControl</h1>
             </div>
 
-            <h2 className="text-5xl font-extrabold leading-tight mb-6">
-              Domine suas <span className="text-green-300">finanças</span> com inteligência.
+            <h2 className="text-4xl font-extrabold leading-tight mb-5">
+              Controle financeiro <span className="text-blue-200">inteligente</span> para sua empresa.
             </h2>
-            <p className="text-xl text-white/80 mb-10 leading-relaxed">
-              O sistema definitivo para gestão financeira empresarial, oferecendo controle total sobre seu fluxo de caixa, contas e relatórios estratégicos.
+            <p className="text-lg text-white/75 mb-10 leading-relaxed">
+              Gerencie contas, fluxo de caixa, DRE e muito mais — tudo em um só lugar.
             </p>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-5">
               {[
                 { icon: ShieldCheck, text: "Segurança Total" },
                 { icon: PieChart, text: "Análise de Dados" },
-                { icon: TrendingUp, text: "Visão Geral" },
-                { icon: DollarSign, text: "Controle Preciso" }
+                { icon: TrendingUp, text: "Fluxo de Caixa" },
+                { icon: BarChart3, text: "Relatórios DRE" }
               ].map((item, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.5 + i * 0.1 }}
-                  className="flex items-center gap-3 text-white/90"
+                  className="flex items-center gap-2.5 text-white/90"
                 >
-                  <div className="p-2 bg-white/10 rounded-lg">
-                    <item.icon className="h-5 w-5" />
+                  <div className="p-2 bg-white/10 rounded-lg border border-white/10">
+                    <item.icon className="h-4 w-4" />
                   </div>
-                  <span className="font-medium">{item.text}</span>
+                  <span className="text-sm font-medium">{item.text}</span>
                 </motion.div>
               ))}
             </div>
@@ -110,9 +110,9 @@ export default function Login() {
       </div>
 
       {/* Form Side */}
-      <div className="flex-1 flex items-center justify-center p-6 md:p-12 bg-background relative">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-32 -mt-32 blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/5 rounded-full -ml-32 -mb-32 blur-3xl animate-pulse delay-1000" />
+      <div className="flex-1 flex items-center justify-center p-6 md:p-12 bg-slate-50 relative">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100/40 rounded-full -mr-48 -mt-48 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-72 h-72 bg-blue-50/60 rounded-full -ml-36 -mb-36 blur-3xl" />
 
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -121,15 +121,15 @@ export default function Login() {
           className="w-full max-w-[440px] z-10"
         >
           <div className="md:hidden flex justify-center mb-8">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl">
-                <DollarSign className="h-8 w-8 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-blue-600 rounded-xl shadow-md">
+                <TrendingUp className="h-6 w-6 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-primary">FinControl</h1>
+              <h1 className="text-2xl font-bold text-blue-700">FinControl</h1>
             </div>
           </div>
 
-          <Card className="border-none shadow-2xl bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl border border-white/20 dark:border-zinc-800/50">
+          <Card className="border border-slate-200/80 shadow-xl bg-white rounded-2xl">
             <CardContent className="p-8">
               <div className="mb-8">
                 <h3 className="text-3xl font-bold tracking-tight text-foreground mb-2">
