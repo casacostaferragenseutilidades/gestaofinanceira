@@ -20,9 +20,18 @@ app.set("trust proxy", 1);
 // CORS configuration
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  res.header('Access-Control-Allow-Origin', origin || '*');
+  // Em produção, permitir apenas origens específicas se necessário
+  const allowedOrigins = process.env.NODE_ENV === 'production'
+    ? [process.env.FRONTEND_URL || 'https://gestaofinanceira-indol.vercel.app']
+    : ['*'];
+
+  const isAllowed = allowedOrigins.includes('*') || allowedOrigins.includes(origin);
+
+  if (isAllowed) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
   res.header('Access-Control-Allow-Credentials', 'true');
 
   if (req.method === 'OPTIONS') {
@@ -50,12 +59,25 @@ let initPromise: Promise<void> | null = null;
 // Diagnostic health-check route (always available, before init middleware)
 app.get("/api/health-check", async (req, res) => {
   let dbStatus = "unknown";
+  let dbUrlInfo = "missing";
+  
+  if (process.env.DATABASE_URL) {
+    const url = process.env.DATABASE_URL;
+    const isPort6543 = url.includes(":6543");
+    const isPort5432 = url.includes(":5432");
+    dbUrlInfo = isPort6543 ? "Port 6543 (Pooler)" : (isPort5432 ? "Port 5432 (Direct)" : "Unknown Port");
+  }
+
   try {
     if (isInitialized) {
       const { db } = await import("./db");
       if (db) {
         const { sql } = await import("drizzle-orm");
-        await db.execute(sql`SELECT 1`);
+        // Adiciona um timeout explícito de 5 segundos para a query não travar o Vercel
+        const queryPromise = db.execute(sql`SELECT 1`);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Query timeout 5s")), 5000));
+        
+        await Promise.race([queryPromise, timeoutPromise]);
         dbStatus = "connected";
       } else {
         dbStatus = "null - DATABASE_URL missing or invalid";
@@ -73,6 +95,7 @@ app.get("/api/health-check", async (req, res) => {
     hasError: !!initError,
     error: initError?.message,
     dbStatus,
+    dbUrlInfo,
     env: {
       hasDatabaseUrl: !!process.env.DATABASE_URL,
       hasSessionSecret: !!process.env.SESSION_SECRET,

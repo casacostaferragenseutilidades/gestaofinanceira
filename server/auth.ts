@@ -69,6 +69,7 @@ export async function setupAuth(app: Express): Promise<void> {
           tableName: "user_sessions",
           createTableIfMissing: true,
           pruneSessionInterval: false,
+          ttl: 24 * 60 * 60, // 24 horas em segundos
         });
         console.log("[Auth] PostgreSQL session store configured");
       } catch (pgStoreErr: any) {
@@ -96,10 +97,11 @@ export async function setupAuth(app: Express): Promise<void> {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_ENV === "production",
+        secure: process.env.NODE_ENV === "production" && process.env.VERCEL_ENV !== "preview", // Apenas HTTPS em produção (não preview)
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'lax'
+        sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax', // 'none' para cross-origin em produção
+        domain: process.env.NODE_ENV === "production" ? undefined : undefined
       },
     })
   );
