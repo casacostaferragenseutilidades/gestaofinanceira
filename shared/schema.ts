@@ -18,21 +18,19 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  email: true,
-  password: true,
-  name: true,
-  fullName: true,
-  role: true,
-  team: true,
-  status: true,
-  active: true,
-}).extend({
-  id: z.string().optional(),
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
+export const insertUserSchema = createInsertSchema(users);
+export type InsertUser = {
+  id?: string;
+  username: string;
+  email?: string | null;
+  password?: string | null;
+  name?: string | null;
+  fullName?: string | null;
+  role?: string | null;
+  team?: string | null;
+  status?: string | null;
+  active?: boolean | null;
+};
 export type User = typeof users.$inferSelect;
 export type UserRole = "admin" | "financial" | "viewer";
 
@@ -48,8 +46,17 @@ export const suppliers = pgTable("suppliers", {
   active: boolean("active").default(true),
 });
 
-export const insertSupplierSchema = createInsertSchema(suppliers).omit({ id: true });
-export type InsertSupplier = z.infer<typeof insertSupplierSchema>;
+export const insertSupplierSchema = createInsertSchema(suppliers);
+export type InsertSupplier = {
+  id?: string;
+  name: string;
+  document?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  contact?: string | null;
+  address?: string | null;
+  active?: boolean | null;
+};
 export type Supplier = typeof suppliers.$inferSelect;
 
 // Clients (Clientes)
@@ -64,8 +71,16 @@ export const clients = pgTable("clients", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertClientSchema = createInsertSchema(clients).omit({ id: true });
-export type InsertClient = z.infer<typeof insertClientSchema>;
+export const insertClientSchema = createInsertSchema(clients);
+export type InsertClient = {
+  id?: string;
+  name: string;
+  document?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  active?: boolean | null;
+};
 export type Client = typeof clients.$inferSelect;
 
 // Categories (Categorias)
@@ -77,8 +92,14 @@ export const categories = pgTable("categories", {
   color: text("color"), // 'green' | 'blue' | 'red' | 'yellow' | 'purple' | 'pink' | 'orange' | 'cyan' | 'indigo' | 'gray'
 });
 
-export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
-export type InsertCategory = z.infer<typeof insertCategorySchema>;
+export const insertCategorySchema = createInsertSchema(categories);
+export type InsertCategory = {
+  id?: string;
+  name: string;
+  type: string;
+  dreCategory?: string | null;
+  color?: string | null;
+};
 export type Category = typeof categories.$inferSelect;
 
 // Cost Centers (Centros de Custo)
@@ -88,8 +109,12 @@ export const costCenters = pgTable("cost_centers", {
   description: text("description"),
 });
 
-export const insertCostCenterSchema = createInsertSchema(costCenters).omit({ id: true });
-export type InsertCostCenter = z.infer<typeof insertCostCenterSchema>;
+export const insertCostCenterSchema = createInsertSchema(costCenters);
+export type InsertCostCenter = {
+  id?: string;
+  name: string;
+  description?: string | null;
+};
 export type CostCenter = typeof costCenters.$inferSelect;
 
 // Accounts Payable (Contas a Pagar)
@@ -115,8 +140,28 @@ export const accountsPayable = pgTable("accounts_payable", {
   active: boolean("active").notNull().default(true),
 });
 
-export const insertAccountPayableSchema = createInsertSchema(accountsPayable).omit({ id: true });
-export type InsertAccountPayable = z.infer<typeof insertAccountPayableSchema>;
+export const insertAccountPayableSchema = createInsertSchema(accountsPayable);
+export type InsertAccountPayable = {
+  id?: string;
+  description: string;
+  amount: string;
+  dueDate: string;
+  originalDueDate?: string | null;
+  paymentDate?: string | null;
+  status?: string;
+  supplierId?: string | null;
+  categoryId?: string | null;
+  costCenterId?: string | null;
+  paymentMethod?: string | null;
+  lateFees?: string | null;
+  discount?: string | null;
+  notes?: string | null;
+  attachmentUrl?: string | null;
+  recurrence?: string | null;
+  recurrenceEnd?: string | null;
+  companyId?: string | null;
+  active?: boolean;
+};
 export type AccountPayable = typeof accountsPayable.$inferSelect & { categoryName?: string; supplierName?: string };
 
 // Accounts Receivable (Contas a Receber)
@@ -141,8 +186,27 @@ export const accountsReceivable = pgTable("accounts_receivable", {
   active: boolean("active").notNull().default(true),
 });
 
-export const insertAccountReceivableSchema = createInsertSchema(accountsReceivable).omit({ id: true });
-export type InsertAccountReceivable = z.infer<typeof insertAccountReceivableSchema>;
+export const insertAccountReceivableSchema = createInsertSchema(accountsReceivable);
+export type InsertAccountReceivable = {
+  id?: string;
+  description: string;
+  amount: string;
+  saleDate?: string | null;
+  dueDate: string;
+  originalDueDate?: string | null;
+  receivedDate?: string | null;
+  status?: string;
+  clientId?: string | null;
+  categoryId?: string | null;
+  notes?: string | null;
+  mercadoPagoId?: string | null;
+  discount?: string | null;
+  recurrence?: string | null;
+  recurrencePeriod?: string | null;
+  paymentMethod?: string | null;
+  companyId?: string | null;
+  active?: boolean;
+};
 export type AccountReceivable = typeof accountsReceivable.$inferSelect & { categoryName?: string; clientName?: string };
 
 // Card Transactions (Controle de Recebimentos PDR)
@@ -162,8 +226,21 @@ export const cardTransactions = pgTable("card_transactions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertCardTransactionSchema = createInsertSchema(cardTransactions).omit({ id: true, createdAt: true });
-export type InsertCardTransaction = z.infer<typeof insertCardTransactionSchema>;
+export const insertCardTransactionSchema = createInsertSchema(cardTransactions);
+export type InsertCardTransaction = {
+  id?: string;
+  saleDate: string;
+  paymentMethod: string;
+  grossAmount: string;
+  feePercentage: string;
+  netAmount: string;
+  transactionNumber?: string | null;
+  status?: string;
+  settlementDate?: string | null;
+  notes?: string | null;
+  companyId?: string | null;
+  active?: boolean;
+};
 export type CardTransaction = typeof cardTransactions.$inferSelect;
 
 // Mercado Pago Transactions
@@ -180,8 +257,19 @@ export const mercadoPagoTransactions = pgTable("mercado_pago_transactions", {
   accountReceivableId: varchar("account_receivable_id"),
 });
 
-export const insertMercadoPagoTransactionSchema = createInsertSchema(mercadoPagoTransactions).omit({ id: true });
-export type InsertMercadoPagoTransaction = z.infer<typeof insertMercadoPagoTransactionSchema>;
+export const insertMercadoPagoTransactionSchema = createInsertSchema(mercadoPagoTransactions);
+export type InsertMercadoPagoTransaction = {
+  id?: string;
+  externalId: string;
+  description?: string | null;
+  amount: string;
+  fee?: string | null;
+  netAmount?: string | null;
+  transactionDate: string;
+  status: string;
+  reconciled?: boolean;
+  accountReceivableId?: string | null;
+};
 export type MercadoPagoTransaction = typeof mercadoPagoTransactions.$inferSelect;
 
 // Extended types for frontend with relations
@@ -302,12 +390,42 @@ export const balanceAdjustments = pgTable("balance_adjustments", {
   userId: varchar("user_id").references(() => users.id),
 });
 
-export const insertCashFlowEntrySchema = createInsertSchema(cashFlowEntries).omit({ id: true, createdAt: true });
-export type InsertCashFlowEntry = z.infer<typeof insertCashFlowEntrySchema>;
+export const insertCashFlowEntrySchema = createInsertSchema(cashFlowEntries);
+export type InsertCashFlowEntry = {
+  id?: string;
+  date: string;
+  competenceDate?: string | null;
+  type: string;
+  movementType?: string;
+  description: string;
+  categoryId?: string | null;
+  subcategoryId?: string | null;
+  amount: string;
+  grossAmount?: string | null;
+  fees?: string | null;
+  paymentMethod: string;
+  account: string;
+  status?: string;
+  document?: string | null;
+  costCenter?: string | null;
+  recurrence?: string | null;
+  dueDate?: string | null;
+  actualDate?: string | null;
+  userId?: string | null;
+  companyId?: string | null;
+};
 export type CashFlowEntry = typeof cashFlowEntries.$inferSelect;
 
-export const insertBalanceAdjustmentSchema = createInsertSchema(balanceAdjustments).omit({ id: true, createdAt: true });
-export type InsertBalanceAdjustment = z.infer<typeof insertBalanceAdjustmentSchema>;
+export const insertBalanceAdjustmentSchema = createInsertSchema(balanceAdjustments);
+export type InsertBalanceAdjustment = {
+  id?: string;
+  date: string;
+  balanceType: string;
+  description: string;
+  amount: string;
+  account: string;
+  userId?: string | null;
+};
 export type BalanceAdjustment = typeof balanceAdjustments.$inferSelect;
 export interface DailyMovement {
   id: string;
@@ -367,8 +485,17 @@ export const companies = pgTable("companies", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertCompanySchema = createInsertSchema(companies).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export const insertCompanySchema = createInsertSchema(companies);
+export type InsertCompany = {
+  id?: string;
+  nome: string;
+  razaoSocial: string;
+  cnpj: string;
+  telefone?: string | null;
+  email?: string | null;
+  endereco?: string | null;
+  status?: string;
+};
 export type Company = typeof companies.$inferSelect;
 
 // Notes (Anotações)
@@ -382,8 +509,14 @@ export const notes = pgTable("notes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertNoteSchema = createInsertSchema(notes).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertNote = z.infer<typeof insertNoteSchema>;
+export const insertNoteSchema = createInsertSchema(notes);
+export type InsertNote = {
+  id?: string;
+  title: string;
+  content?: string | null;
+  favorite?: boolean | null;
+  color?: string | null;
+};
 export type Note = typeof notes.$inferSelect;
 
 // Sessions
@@ -407,8 +540,18 @@ export const financialGoals = pgTable("financial_goals", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertFinancialGoalSchema = createInsertSchema(financialGoals).omit({ id: true, createdAt: true });
-export type InsertFinancialGoal = z.infer<typeof insertFinancialGoalSchema>;
+export const insertFinancialGoalSchema = createInsertSchema(financialGoals);
+export type InsertFinancialGoal = {
+  id?: string;
+  name: string;
+  type: string;
+  targetAmount: string;
+  month: number;
+  year: number;
+  categoryId?: string | null;
+  level?: string;
+  active?: boolean;
+};
 export type FinancialGoal = typeof financialGoals.$inferSelect;
 
 // Bank Accounts (Contas Bancárias)
@@ -423,8 +566,17 @@ export const bankAccounts = pgTable("bank_accounts", {
   active: boolean("active").default(true),
 });
 
-export const insertBankAccountSchema = createInsertSchema(bankAccounts).omit({ id: true });
-export type InsertBankAccount = z.infer<typeof insertBankAccountSchema>;
+export const insertBankAccountSchema = createInsertSchema(bankAccounts);
+export type InsertBankAccount = {
+  id?: string;
+  name: string;
+  bank?: string | null;
+  agency?: string | null;
+  account?: string | null;
+  type?: string | null;
+  companyId?: string | null;
+  active?: boolean | null;
+};
 export type BankAccount = typeof bankAccounts.$inferSelect;
 
 // Payment Configs (Taxas e Máquinas)
@@ -440,8 +592,18 @@ export const paymentConfigs = pgTable("payment_configs", {
   active: boolean("active").default(true),
 });
 
-export const insertPaymentConfigSchema = createInsertSchema(paymentConfigs).omit({ id: true });
-export type InsertPaymentConfig = z.infer<typeof insertPaymentConfigSchema>;
+export const insertPaymentConfigSchema = createInsertSchema(paymentConfigs);
+export type InsertPaymentConfig = {
+  id?: string;
+  name: string;
+  type: string;
+  bankAccountId?: string | null;
+  feeDebit?: string | null;
+  feeCredit?: string | null;
+  feePix?: string | null;
+  companyId?: string | null;
+  active?: boolean | null;
+};
 export type PaymentConfig = typeof paymentConfigs.$inferSelect;
 
 // Retail Sales (Vendas de Varejo)
@@ -468,9 +630,181 @@ export const retailSales = pgTable("retail_sales", {
   active: boolean("active").notNull().default(true),
 });
 
-export const insertRetailSaleSchema = createInsertSchema(retailSales).omit({ id: true, createdAt: true });
-export type InsertRetailSale = z.infer<typeof insertRetailSaleSchema>;
+export const insertRetailSaleSchema = createInsertSchema(retailSales);
+export type InsertRetailSale = {
+  id?: string;
+  date: string;
+  type?: string;
+  description: string;
+  amount: string;
+  quantity?: number | null;
+  unitPrice?: string | null;
+  paymentMethod: string;
+  account: string;
+  categoryId?: string | null;
+  clientName?: string | null;
+  document?: string | null;
+  costCenter?: string | null;
+  notes?: string | null;
+  status?: string;
+  cashFlowEntryId?: string | null;
+  userId?: string | null;
+  companyId?: string | null;
+  active?: boolean;
+};
 export type RetailSale = typeof retailSales.$inferSelect;
+
+// Orçamentos (Budgets/Quotes)
+export const orcamentos = pgTable("orcamentos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  numero: integer("numero").notNull(),
+  clientId: varchar("client_id").references(() => clients.id),
+  vendedorId: varchar("vendedor_id").references(() => users.id),
+  companyId: varchar("company_id").references(() => companies.id),
+  data: date("data").notNull(),
+  validade: date("validade").notNull(),
+  subtotal: decimal("subtotal", { precision: 15, scale: 2 }).notNull().default("0"),
+  desconto: decimal("desconto", { precision: 15, scale: 2 }).default("0"),
+  frete: decimal("frete", { precision: 15, scale: 2 }).default("0"),
+  impostos: decimal("impostos", { precision: 15, scale: 2 }).default("0"),
+  total: decimal("total", { precision: 15, scale: 2 }).notNull().default("0"),
+  status: text("status").notNull().default("editing"),
+  observacoes: text("observacoes"),
+  condicoesPagamento: text("condicoes_pagamento"),
+  descontoPercentual: decimal("desconto_percentual", { precision: 5, scale: 2 }).default("0"),
+  descontoAprovado: boolean("desconto_aprovado").default(false),
+  descontoAprovadoPor: varchar("desconto_aprovado_por").references(() => users.id),
+  descontoMotivo: text("desconto_motivo"),
+  accountReceivableId: varchar("account_receivable_id"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const orcamentoItens = pgTable("orcamento_itens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orcamentoId: varchar("orcamento_id").references(() => orcamentos.id).notNull(),
+  produtoCodigo: text("produto_codigo"),
+  produtoDescricao: text("produto_descricao").notNull(),
+  unidade: text("unidade").default("UN"),
+  quantidade: decimal("quantidade", { precision: 10, scale: 2 }).notNull().default("1"),
+  valorUnitario: decimal("valor_unitario", { precision: 15, scale: 2 }).notNull(),
+  descontoPercentual: decimal("desconto_percentual", { precision: 5, scale: 2 }).default("0"),
+  descontoValor: decimal("desconto_valor", { precision: 15, scale: 2 }).default("0"),
+  subtotal: decimal("subtotal", { precision: 15, scale: 2 }).notNull(),
+});
+
+export const historicoOrcamento = pgTable("historico_orcamento", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orcamentoId: varchar("orcamento_id").references(() => orcamentos.id).notNull(),
+  usuarioId: varchar("usuario_id").references(() => users.id),
+  acao: text("acao").notNull(),
+  descricao: text("descricao"),
+  dataHora: timestamp("data_hora").defaultNow(),
+});
+
+// Notifications System
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  type: text("type").notNull(), // 'orcamento_expirado', 'orcamento_visualizado', 'orcamento_aprovado', 'orcamento_recusado', 'desconto_aprovado', 'orcamento_convertido'
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  relatedId: varchar("related_id"), // ID do orçamento relacionado
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications);
+export type InsertNotification = {
+  id?: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  relatedId?: string | null;
+  read?: boolean;
+};
+export type Notification = typeof notifications.$inferSelect;
+
+export const insertOrcamentoSchema = createInsertSchema(orcamentos);
+export type InsertOrcamento = {
+  id?: string;
+  numero: number;
+  clientId?: string | null;
+  vendedorId?: string | null;
+  companyId?: string | null;
+  data: string;
+  validade: string;
+  subtotal?: string;
+  desconto?: string | null;
+  frete?: string | null;
+  impostos?: string | null;
+  total?: string;
+  status?: string;
+  observacoes?: string | null;
+  condicoesPagamento?: string | null;
+  descontoPercentual?: string | null;
+  descontoAprovado?: boolean | null;
+  descontoAprovadoPor?: string | null;
+  descontoMotivo?: string | null;
+  accountReceivableId?: string | null;
+  active?: boolean;
+};
+export type Orcamento = typeof orcamentos.$inferSelect;
+
+export const insertOrcamentoItemSchema = createInsertSchema(orcamentoItens);
+export type InsertOrcamentoItem = {
+  id?: string;
+  orcamentoId?: string;
+  produtoCodigo?: string | null;
+  produtoDescricao: string;
+  unidade?: string | null;
+  quantidade?: string;
+  valorUnitario: string;
+  descontoPercentual?: string | null;
+  descontoValor?: string | null;
+  subtotal: string;
+};
+export type OrcamentoItem = typeof orcamentoItens.$inferSelect;
+
+export const insertHistoricoOrcamentoSchema = createInsertSchema(historicoOrcamento);
+export type InsertHistoricoOrcamento = {
+  id?: string;
+  orcamentoId: string;
+  usuarioId?: string | null;
+  acao: string;
+  descricao?: string | null;
+};
+export type HistoricoOrcamento = typeof historicoOrcamento.$inferSelect;
+
+export type OrcamentoStatus =
+  | "editing"
+  | "saved"
+  | "sent"
+  | "viewed"
+  | "negotiating"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "converted";
+
+export type OrcamentoWithRelations = Orcamento & {
+  clientName?: string;
+  vendedorName?: string;
+  itens?: OrcamentoItem[];
+  historico?: HistoricoOrcamento[];
+};
+
+export interface OrcamentoDashboardStats {
+  totalHoje: number;
+  valorTotal: number;
+  aprovados: number;
+  recusados: number;
+  pendentes: number;
+  taxaConversao: number;
+  rankingVendedores: { vendedorId: string; vendedorName: string; total: number; count: number }[];
+}
 
 export interface FinancialGoalProgress extends FinancialGoal {
   currentAmount: number;
@@ -484,4 +818,3 @@ export interface CashFlowSummary {
   finalBalance: number;
   projectedBalance: number;
 }
-

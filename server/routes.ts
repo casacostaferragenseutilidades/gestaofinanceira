@@ -1226,5 +1226,231 @@ export function registerRoutes(
       res.status(500).json({ error: "Erro ao buscar resumo de vendas", details: error.message });
     }
   });
+  // Orçamentos Routes
+  app.get("/api/orcamentos", requireViewer, async (req, res) => {
+    try {
+      let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+      if (Array.isArray(companyId)) { companyId = companyId.includes('all') ? 'all' : companyId[0]; }
+      else if (typeof companyId === 'string' && companyId.includes(',')) { const parts = companyId.split(','); companyId = parts.includes('all') ? 'all' : parts[0]; }
+
+      await storage.expireOrcamentos();
+
+      const orcamentosList = await storage.getOrcamentos(companyId, {
+        status: req.query.status as string,
+        clientId: req.query.clientId as string,
+        vendedorId: req.query.vendedorId as string,
+        startDate: req.query.startDate as string,
+        endDate: req.query.endDate as string,
+        search: req.query.search as string,
+      });
+      res.json(orcamentosList);
+    } catch (error: any) {
+      console.error("Error fetching orcamentos:", error);
+      res.status(500).json({ error: "Erro ao buscar orçamentos", details: error.message });
+    }
+  });
+
+  app.get("/api/orcamentos/dashboard", requireViewer, async (req, res) => {
+    try {
+      let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+      if (Array.isArray(companyId)) { companyId = companyId.includes('all') ? 'all' : companyId[0]; }
+
+      const stats = await storage.getOrcamentoDashboardStats(
+        companyId,
+        req.query.startDate as string,
+        req.query.endDate as string
+      );
+      res.json(stats);
+    } catch (error: any) {
+      console.error("Error fetching orcamento dashboard:", error);
+      res.status(500).json({ error: "Erro ao buscar dashboard", details: error.message });
+    }
+  });
+
+  app.get("/api/orcamentos/:id", requireViewer, async (req, res) => {
+    try {
+      const orcamento = await storage.getOrcamento(req.params.id);
+      if (!orcamento) return res.status(404).json({ error: "Orçamento não encontrado" });
+      res.json(orcamento);
+    } catch (error: any) {
+      console.error("Error fetching orcamento:", error);
+      res.status(500).json({ error: "Erro ao buscar orçamento", details: error.message });
+    }
+  });
+
+  app.post("/api/orcamentos", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const companyId = req.headers['x-company-id'] as string || undefined;
+      const { itens, ...orcamentoData } = req.body;
+
+      const descontoPct = parseFloat(orcamentoData.descontoPercentual ?? "0");
+      const needsApproval = descontoPct > 10;
+
+      const orcamento = await storage.createOrcamento(
+        {
+          ...orcamentoData,
+          vendedorId: orcamentoData.vendedorId || userId,
+          userId,
+          companyId,
+          status: orcamentoData.status || "saved",
+          descontoAprovado: !needsApproval,
+        },
+        itens || []
+      );
+      res.status(201).json(orcamento);
+    } catch (error: any) {
+      console.error("Error creating orcamento:", error);
+      res.status(400).json({ error: "Erro ao criar orçamento", details: error.message });
+    }
+  });
+
+  app.patch("/api/orcamentos/:id", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const { itens, ...orcamentoData } = req.body;
+      const descontoPct = parseFloat(orcamentoData.descontoPercentual ?? "0");
+      if (descontoPct > 10) {
+        orcamentoData.descontoAprovado = false;
+      }
+
+      const orcamento = await storage.updateOrcamento(req.params.id, orcamentoData, itens, userId);
+      if (!orcamento) return res.status(404).json({ error: "Orçamento não encontrado" });
+      res.json(orcamento);
+    } catch (error: any) {
+      console.error("Error updating orcamento:", error);
+      res.status(400).json({ error: "Erro ao atualizar orçamento", details: error.message });
+    }
+  });
+
+  app.delete("/api/orcamentos/:id", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      await storage.deleteOrcamento(req.params.id, userId);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting orcamento:", error);
+      res.status(500).json({ error: "Erro ao excluir orçamento", details: error.message });
+    }
+  });
+
+  app.patch("/api/orcamentos/:id/status", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const { status, descricao } = req.body;
+      const orcamento = await storage.updateOrcamentoStatus(req.params.id, status, userId, descricao);
+      if (!orcamento) return res.status(404).json({ error: "Orçamento não encontrado" });
+      res.json(orcamento);
+    } catch (error: any) {
+      console.error("Error updating orcamento status:", error);
+      res.status(400).json({ error: "Erro ao atualizar status", details: error.message });
+    }
+  });
+
+  app.patch("/api/orcamentos/:id/approve-discount", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const { aprovado, motivo } = req.body;
+      const orcamento = await storage.approveOrcamentoDesconto(req.params.id, userId, aprovado, motivo);
+      if (!orcamento) return res.status(404).json({ error: "Orçamento não encontrado" });
+      res.json(orcamento);
+    } catch (error: any) {
+      console.error("Error approving discount:", error);
+      res.status(400).json({ error: "Erro ao aprovar desconto", details: error.message });
+    }
+  });
+
+  app.post("/api/orcamentos/:id/convert", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const companyId = req.headers['x-company-id'] as string || undefined;
+      const existing = await storage.getOrcamento(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Orçamento não encontrado" });
+
+      const descontoPct = parseFloat(existing.descontoPercentual?.toString() ?? "0");
+      if (descontoPct > 10 && !existing.descontoAprovado) {
+        return res.status(400).json({ error: "Desconto acima de 10% requer aprovação do gerente" });
+      }
+
+      const result = await storage.convertOrcamentoToReceivable(req.params.id, userId, companyId);
+      if (!result) return res.status(404).json({ error: "Orçamento não encontrado" });
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error converting orcamento:", error);
+      res.status(400).json({ error: "Erro ao converter orçamento", details: error.message });
+    }
+  });
+
+  // Orçamentos Reports
+  app.get("/api/orcamentos/reports", requireViewer, async (req, res) => {
+    try {
+      let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+      if (Array.isArray(companyId)) { companyId = companyId.includes('all') ? 'all' : companyId[0]; }
+      else if (typeof companyId === 'string' && companyId.includes(',')) { const parts = companyId.split(','); companyId = parts.includes('all') ? 'all' : parts[0]; }
+
+      const reports = await storage.getOrcamentoReports(companyId, {
+        startDate: req.query.startDate as string,
+        endDate: req.query.endDate as string,
+        vendedorId: req.query.vendedorId as string,
+        clientId: req.query.clientId as string,
+      });
+      res.json(reports);
+    } catch (error: any) {
+      console.error("Error fetching orcamento reports:", error);
+      res.status(500).json({ error: "Erro ao buscar relatórios", details: error.message });
+    }
+  });
+
+  // Notifications Routes
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const unreadOnly = req.query.unreadOnly === "true";
+      const notifications = await storage.getNotifications(userId, unreadOnly);
+      res.json(notifications);
+    } catch (error: any) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "Erro ao buscar notificações", details: error.message });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const updated = await storage.markNotificationAsRead(req.params.id);
+      res.json({ success: updated });
+    } catch (error: any) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: "Erro ao marcar notificação", details: error.message });
+    }
+  });
+
+  app.patch("/api/notifications/read-all", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const count = await storage.markAllNotificationsAsRead(userId);
+      res.json({ success: true, count });
+    } catch (error: any) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ error: "Erro ao marcar notificações", details: error.message });
+    }
+  });
+
   return httpServer;
 }

@@ -330,7 +330,7 @@ export default function CashFlow() {
 
   return (
     <div className="flex-1 bg-background p-6 md:p-10 overflow-x-hidden">
-      <div className="w-full space-y-10">
+      <div className="w-full max-w-7xl mx-auto space-y-10">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
           <div>
@@ -475,7 +475,7 @@ export default function CashFlow() {
         </div>
 
         {/* Cards de Resumo */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6 gap-8">
           {/* Total Entradas */}
           <Card className="border-0 shadow-2xl shadow-blue-500/10 bg-gradient-to-br from-blue-500 to-indigo-700 rounded-3xl overflow-hidden group hover:scale-[1.03] transition-all duration-500">
             <CardContent className="p-6 text-white h-full flex flex-col justify-between">
@@ -634,7 +634,7 @@ export default function CashFlow() {
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-6">
             {(() => {
               const allTransactions = [
                 ...(accountsReceivable?.map(acc => ({
@@ -711,7 +711,7 @@ export default function CashFlow() {
               if (allTransactions.length > 0) {
                 return (
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table className="min-w-[900px]">
                       <TableHeader>
                         <TableRow className="border-b border-border/50 bg-muted/20">
                           <TableHead className="font-black text-[10px] uppercase tracking-widest px-6 py-4">Fluxo</TableHead>

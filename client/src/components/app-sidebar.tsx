@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Settings,
   Store,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   Sidebar,
@@ -62,6 +63,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Operacional",
     items: [
+      { title: "Orçamentos", url: "/orcamentos", icon: FileSpreadsheet },
       { title: "Contas a Pagar", url: "/contas-pagar", icon: CreditCard, badge: "urgent" },
       { title: "Contas a Receber", url: "/contas-receber", icon: Wallet },
       { title: "Recebimentos PDR", url: "/controle-recebimentos", icon: RefreshCw },

@@ -6,6 +6,7 @@ import {
   users, suppliers, clients, categories, costCenters,
   accountsPayable, accountsReceivable, mercadoPagoTransactions, cashFlowEntries, balanceAdjustments, notes,
   financialGoals, companies, cardTransactions, bankAccounts, paymentConfigs, retailSales,
+  orcamentos, orcamentoItens, historicoOrcamento, notifications,
 } from "@shared/schema";
 import type {
   User, InsertUser,
@@ -20,6 +21,9 @@ import type {
   BankAccount, InsertBankAccount,
   PaymentConfig, InsertPaymentConfig,
   RetailSale, InsertRetailSale,
+  Orcamento, InsertOrcamento, OrcamentoItem, InsertOrcamentoItem,
+  HistoricoOrcamento, InsertHistoricoOrcamento, OrcamentoWithRelations, OrcamentoDashboardStats,
+  Notification, InsertNotification,
   DashboardStats, CashFlowData, DREData, CategoryExpense,
   CashFlowEntry, InsertCashFlowEntry, CashFlowKPIs, CashFlowAlert, DailyMovement,
   BalanceAdjustment, InsertBalanceAdjustment,
@@ -744,7 +748,7 @@ export class DatabaseStorage implements IStorage {
       return;
     }
 
-    const entriesToCreate: (typeof accountsPayable.$inferInsert)[] = [];
+    const entriesToCreate: InsertAccountPayable[] = [];
     const startDateStr = account.dueDate.split('T')[0];
     const endDateStr = recEnd.split('T')[0];
 
@@ -811,7 +815,7 @@ export class DatabaseStorage implements IStorage {
       return;
     }
 
-    const entriesToCreate: (typeof accountsReceivable.$inferInsert)[] = [];
+    const entriesToCreate: InsertAccountReceivable[] = [];
     const startDateStr = account.dueDate.split('T')[0];
     const endDateStr = recEnd.split('T')[0];
 
@@ -2631,6 +2635,572 @@ export class DatabaseStorage implements IStorage {
     return !!deleted;
   }
 
+  // Orçamentos
+  async getNextOrcamentoNumero(companyId?: string): Promise<number> {
+    const conditions = [eq(orcamentos.active, true)];
+    if (companyId && companyId !== "all") {
+      conditions.push(eq(orcamentos.companyId, companyId));
+    }
+    const [result] = await db
+      .select({ maxNum: sql<number>`COALESCE(MAX(${orcamentos.numero}), 0)` })
+      .from(orcamentos)
+      .where(and(...conditions));
+    return (result?.maxNum ?? 0) + 1;
+  }
+
+  async getOrcamentos(companyId?: string, filters?: {
+    status?: string;
+    clientId?: string;
+    vendedorId?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+  }): Promise<OrcamentoWithRelations[]> {
+    const conditions = [eq(orcamentos.active, true)];
+    if (companyId && companyId !== "all") {
+      conditions.push(eq(orcamentos.companyId, companyId));
+    }
+    if (filters?.status && filters.status !== "all") {
+      conditions.push(eq(orcamentos.status, filters.status));
+    }
+    if (filters?.clientId) {
+      conditions.push(eq(orcamentos.clientId, filters.clientId));
+    }
+    if (filters?.vendedorId) {
+      conditions.push(eq(orcamentos.vendedorId, filters.vendedorId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(orcamentos.data, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(orcamentos.data, filters.endDate));
+    }
+
+    const rows = await db
+      .select({
+        orcamento: orcamentos,
+        clientName: clients.name,
+        vendedorName: users.fullName,
+      })
+      .from(orcamentos)
+      .leftJoin(clients, eq(orcamentos.clientId, clients.id))
+      .leftJoin(users, eq(orcamentos.vendedorId, users.id))
+      .where(and(...conditions))
+      .orderBy(sql`${orcamentos.createdAt} DESC`);
+
+    let result: OrcamentoWithRelations[] = rows.map(r => ({
+      ...r.orcamento,
+      clientName: r.clientName ?? undefined,
+      vendedorName: r.vendedorName ?? undefined,
+    }));
+
+    if (filters?.search) {
+      const term = filters.search.toLowerCase();
+      result = result.filter(o =>
+        o.numero.toString().includes(term) ||
+        (o.clientName?.toLowerCase().includes(term))
+      );
+    }
+
+    return result;
+  }
+
+  async getOrcamento(id: string): Promise<OrcamentoWithRelations | undefined> {
+    const [row] = await db
+      .select({
+        orcamento: orcamentos,
+        clientName: clients.name,
+        vendedorName: users.fullName,
+      })
+      .from(orcamentos)
+      .leftJoin(clients, eq(orcamentos.clientId, clients.id))
+      .leftJoin(users, eq(orcamentos.vendedorId, users.id))
+      .where(eq(orcamentos.id, id));
+
+    if (!row) return undefined;
+
+    const itens = await db
+      .select()
+      .from(orcamentoItens)
+      .where(eq(orcamentoItens.orcamentoId, id));
+
+    const historico = await db
+      .select()
+      .from(historicoOrcamento)
+      .where(eq(historicoOrcamento.orcamentoId, id))
+      .orderBy(sql`${historicoOrcamento.dataHora} DESC`);
+
+    return {
+      ...row.orcamento,
+      clientName: row.clientName ?? undefined,
+      vendedorName: row.vendedorName ?? undefined,
+      itens,
+      historico,
+    };
+  }
+
+  async createOrcamento(
+    data: InsertOrcamento & { userId: string; companyId?: string },
+    itens: Omit<InsertOrcamentoItem, "orcamentoId">[]
+  ): Promise<OrcamentoWithRelations> {
+    const numero = data.numero ?? await this.getNextOrcamentoNumero(data.companyId);
+
+    const [newOrcamento] = await db.insert(orcamentos).values({
+      ...data,
+      numero,
+      subtotal: data.subtotal?.toString() ?? "0",
+      desconto: data.desconto?.toString() ?? "0",
+      frete: data.frete?.toString() ?? "0",
+      impostos: data.impostos?.toString() ?? "0",
+      total: data.total?.toString() ?? "0",
+      descontoPercentual: data.descontoPercentual?.toString() ?? "0",
+    }).returning();
+
+    if (itens.length > 0) {
+      await db.insert(orcamentoItens).values(
+        itens.map(item => ({
+          ...item,
+          orcamentoId: newOrcamento.id,
+          quantidade: item.quantidade?.toString() ?? "1",
+          valorUnitario: item.valorUnitario.toString(),
+          descontoPercentual: item.descontoPercentual?.toString() ?? "0",
+          descontoValor: item.descontoValor?.toString() ?? "0",
+          subtotal: item.subtotal.toString(),
+        }))
+      );
+    }
+
+    await this.addHistoricoOrcamento(newOrcamento.id, data.userId, "created", "Orçamento criado");
+
+    return (await this.getOrcamento(newOrcamento.id))!;
+  }
+
+  async updateOrcamento(
+    id: string,
+    data: Partial<InsertOrcamento>,
+    itens?: Omit<InsertOrcamentoItem, "orcamentoId">[],
+    userId?: string
+  ): Promise<OrcamentoWithRelations | undefined> {
+    const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
+    for (const field of ["subtotal", "desconto", "frete", "impostos", "total", "descontoPercentual"] as const) {
+      if (data[field] !== undefined) {
+        updateData[field] = data[field]!.toString();
+      }
+    }
+
+    const [updated] = await db.update(orcamentos).set(updateData).where(eq(orcamentos.id, id)).returning();
+    if (!updated) return undefined;
+
+    if (itens) {
+      await db.delete(orcamentoItens).where(eq(orcamentoItens.orcamentoId, id));
+      if (itens.length > 0) {
+        await db.insert(orcamentoItens).values(
+          itens.map(item => ({
+            ...item,
+            orcamentoId: id,
+            quantidade: item.quantidade?.toString() ?? "1",
+            valorUnitario: item.valorUnitario.toString(),
+            descontoPercentual: item.descontoPercentual?.toString() ?? "0",
+            descontoValor: item.descontoValor?.toString() ?? "0",
+            subtotal: item.subtotal.toString(),
+          }))
+        );
+      }
+    }
+
+    if (userId) {
+      await this.addHistoricoOrcamento(id, userId, "updated", "Orçamento editado");
+    }
+
+    return this.getOrcamento(id);
+  }
+
+  async deleteOrcamento(id: string, userId?: string): Promise<boolean> {
+    const [deleted] = await db.update(orcamentos).set({ active: false }).where(eq(orcamentos.id, id)).returning();
+    if (deleted && userId) {
+      await this.addHistoricoOrcamento(id, userId, "deleted", "Orçamento excluído");
+    }
+    return !!deleted;
+  }
+
+  async addHistoricoOrcamento(
+    orcamentoId: string,
+    usuarioId: string,
+    acao: string,
+    descricao?: string
+  ): Promise<HistoricoOrcamento> {
+    const [entry] = await db.insert(historicoOrcamento).values({
+      orcamentoId,
+      usuarioId,
+      acao,
+      descricao,
+    }).returning();
+    return entry;
+  }
+
+  async updateOrcamentoStatus(
+    id: string,
+    status: string,
+    userId: string,
+    descricao?: string
+  ): Promise<OrcamentoWithRelations | undefined> {
+    const [updated] = await db
+      .update(orcamentos)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(orcamentos.id, id))
+      .returning();
+    if (!updated) return undefined;
+
+    await this.addHistoricoOrcamento(id, userId, status, descricao);
+
+    // Create notification for status changes
+    const orcamento = await this.getOrcamento(id);
+    if (orcamento && orcamento.vendedorId) {
+      let notificationType = "";
+      let title = "";
+      let message = "";
+
+      switch (status) {
+        case "approved":
+          notificationType = "orcamento_aprovado";
+          title = "Orçamento Aprovado";
+          message = `Orçamento #${orcamento.numero} foi aprovado pelo cliente.`;
+          break;
+        case "rejected":
+          notificationType = "orcamento_recusado";
+          title = "Orçamento Recusado";
+          message = `Orçamento #${orcamento.numero} foi recusado pelo cliente.`;
+          break;
+        case "converted":
+          notificationType = "orcamento_convertido";
+          title = "Orçamento Convertido";
+          message = `Orçamento #${orcamento.numero} foi convertido em venda.`;
+          break;
+        default:
+          return this.getOrcamento(id);
+      }
+
+      if (notificationType && orcamento.vendedorId) {
+        await this.createNotification(
+          orcamento.vendedorId,
+          notificationType,
+          title,
+          message,
+          id
+        );
+      }
+    }
+
+    return this.getOrcamento(id);
+  }
+
+  async approveOrcamentoDesconto(
+    id: string,
+    userId: string,
+    aprovado: boolean,
+    motivo?: string
+  ): Promise<OrcamentoWithRelations | undefined> {
+    const [updated] = await db.update(orcamentos).set({
+      descontoAprovado: aprovado,
+      descontoAprovadoPor: userId,
+      descontoMotivo: motivo,
+      updatedAt: new Date(),
+    }).where(eq(orcamentos.id, id)).returning();
+    if (!updated) return undefined;
+
+    await this.addHistoricoOrcamento(id, userId, aprovado ? "discount_approved" : "discount_rejected", motivo);
+
+    // Create notification for discount approval
+    const orcamento = await this.getOrcamento(id);
+    if (orcamento && orcamento.vendedorId) {
+      await this.createNotification(
+        orcamento.vendedorId,
+        "desconto_aprovado",
+        aprovado ? "Desconto Aprovado" : "Desconto Recusado",
+        aprovado 
+          ? `O desconto do orçamento #${orcamento.numero} foi aprovado pelo gerente.`
+          : `O desconto do orçamento #${orcamento.numero} foi recusado pelo gerente.`,
+        id
+      );
+    }
+
+    return this.getOrcamento(id);
+  }
+
+  async convertOrcamentoToReceivable(
+    id: string,
+    userId: string,
+    companyId?: string
+  ): Promise<{ orcamento: OrcamentoWithRelations; receivable: AccountReceivable } | undefined> {
+    const orcamento = await this.getOrcamento(id);
+    if (!orcamento) return undefined;
+
+    const dueDate = orcamento.validade;
+    const receivable = await this.createAccountReceivable({
+      description: `Orçamento #${orcamento.numero}${orcamento.clientName ? ` - ${orcamento.clientName}` : ""}`,
+      amount: parseFloat(orcamento.total.toString()).toString(),
+      dueDate,
+      saleDate: orcamento.data,
+      clientId: orcamento.clientId ?? undefined,
+      status: "pending",
+      companyId,
+      notes: orcamento.observacoes ?? undefined,
+    });
+
+    await db.update(orcamentos).set({
+      status: "converted",
+      accountReceivableId: receivable.id,
+      updatedAt: new Date(),
+    }).where(eq(orcamentos.id, id));
+
+    await this.addHistoricoOrcamento(id, userId, "converted", "Convertido em conta a receber");
+
+    const updated = await this.getOrcamento(id);
+    return updated ? { orcamento: updated, receivable } : undefined;
+  }
+
+  async getOrcamentoDashboardStats(companyId?: string, startDate?: string, endDate?: string): Promise<OrcamentoDashboardStats> {
+    const today = new Date().toISOString().split("T")[0];
+    const all = await this.getOrcamentos(companyId, { startDate, endDate });
+
+    const hoje = all.filter(o => o.data === today);
+    const aprovados = all.filter(o => o.status === "approved" || o.status === "converted");
+    const recusados = all.filter(o => o.status === "rejected");
+    const pendentes = all.filter(o => ["saved", "sent", "viewed", "negotiating"].includes(o.status));
+    const convertidos = all.filter(o => o.status === "converted");
+    const enviados = all.filter(o => ["sent", "viewed", "negotiating", "approved", "rejected", "converted"].includes(o.status));
+
+    const vendedorMap = new Map<string, { vendedorName: string; total: number; count: number }>();
+    for (const o of all) {
+      if (!o.vendedorId) continue;
+      const existing = vendedorMap.get(o.vendedorId) ?? { vendedorName: o.vendedorName ?? "Sem nome", total: 0, count: 0 };
+      existing.total += parseFloat(o.total.toString());
+      existing.count += 1;
+      vendedorMap.set(o.vendedorId, existing);
+    }
+
+    return {
+      totalHoje: hoje.length,
+      valorTotal: all.reduce((s, o) => s + parseFloat(o.total.toString()), 0),
+      aprovados: aprovados.length,
+      recusados: recusados.length,
+      pendentes: pendentes.length,
+      taxaConversao: enviados.length > 0 ? (convertidos.length / enviados.length) * 100 : 0,
+      rankingVendedores: Array.from(vendedorMap.entries())
+        .map(([vendedorId, data]) => ({ vendedorId, ...data }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10),
+    };
+  }
+
+  async expireOrcamentos(): Promise<number> {
+    const today = new Date().toISOString().split("T")[0];
+    const expired = await db
+      .update(orcamentos)
+      .set({ status: "expired", updatedAt: new Date() })
+      .where(and(
+        eq(orcamentos.active, true),
+        lt(orcamentos.validade, today),
+        sql`${orcamentos.status} NOT IN ('converted', 'expired', 'rejected')`
+      ))
+      .returning();
+    return expired.length;
+  }
+
+  // Orçamentos Reports
+  async getOrcamentoReports(companyId?: string, filters?: {
+    startDate?: string;
+    endDate?: string;
+    vendedorId?: string;
+    clientId?: string;
+  }): Promise<any> {
+    const conditions = [eq(orcamentos.active, true)];
+    if (companyId && companyId !== "all") {
+      conditions.push(eq(orcamentos.companyId, companyId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(orcamentos.data, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(orcamentos.data, filters.endDate));
+    }
+    if (filters?.vendedorId) {
+      conditions.push(eq(orcamentos.vendedorId, filters.vendedorId));
+    }
+    if (filters?.clientId) {
+      conditions.push(eq(orcamentos.clientId, filters.clientId));
+    }
+
+    const allOrcamentos = await db
+      .select({
+        orcamento: orcamentos,
+        clientName: clients.name,
+        vendedorName: users.fullName,
+      })
+      .from(orcamentos)
+      .leftJoin(clients, eq(orcamentos.clientId, clients.id))
+      .leftJoin(users, eq(orcamentos.vendedorId, users.id))
+      .where(and(...conditions))
+      .orderBy(sql`${orcamentos.data} DESC`);
+
+    // Get all items for product analysis
+    const orcamentoIds = allOrcamentos.map(o => o.orcamento.id);
+    const allItens = orcamentoIds.length > 0
+      ? await db
+          .select()
+          .from(orcamentoItens)
+          .where(sql`${orcamentoItens.orcamentoId} = ANY(${orcamentoIds})`)
+      : [];
+
+    // Calculate metrics
+    const totalOrçamentos = allOrcamentos.length;
+    const valorTotalOrçado = allOrcamentos.reduce((sum, o) => sum + parseFloat(o.orcamento.total.toString()), 0);
+    const valorConvertido = allOrcamentos
+      .filter(o => o.orcamento.status === "converted")
+      .reduce((sum, o) => sum + parseFloat(o.orcamento.total.toString()), 0);
+    const valorDescontos = allOrcamentos.reduce((sum, o) => sum + parseFloat(o.orcamento.desconto?.toString() || "0"), 0);
+    
+    const statusCounts = {
+      editing: allOrcamentos.filter(o => o.orcamento.status === "editing").length,
+      saved: allOrcamentos.filter(o => o.orcamento.status === "saved").length,
+      sent: allOrcamentos.filter(o => o.orcamento.status === "sent").length,
+      viewed: allOrcamentos.filter(o => o.orcamento.status === "viewed").length,
+      negotiating: allOrcamentos.filter(o => o.orcamento.status === "negotiating").length,
+      approved: allOrcamentos.filter(o => o.orcamento.status === "approved").length,
+      rejected: allOrcamentos.filter(o => o.orcamento.status === "rejected").length,
+      expired: allOrcamentos.filter(o => o.orcamento.status === "expired").length,
+      converted: allOrcamentos.filter(o => o.orcamento.status === "converted").length,
+    };
+
+    // Product analysis
+    const productMap = new Map<string, { descricao: string; quantidade: number; valorTotal: number; count: number }>();
+    for (const item of allItens) {
+      const existing = productMap.get(item.produtoDescricao) ?? {
+        descricao: item.produtoDescricao,
+        quantidade: 0,
+        valorTotal: 0,
+        count: 0,
+      };
+      existing.quantidade += parseFloat(item.quantidade.toString());
+      existing.valorTotal += parseFloat(item.subtotal.toString());
+      existing.count += 1;
+      productMap.set(item.produtoDescricao, existing);
+    }
+
+    // Client analysis
+    const clientMap = new Map<string, { name: string; total: number; count: number; converted: number }>();
+    for (const o of allOrcamentos) {
+      if (!o.orcamento.clientId) continue;
+      const existing = clientMap.get(o.orcamento.clientId) ?? {
+        name: o.clientName || "Sem nome",
+        total: 0,
+        count: 0,
+        converted: 0,
+      };
+      existing.total += parseFloat(o.orcamento.total.toString());
+      existing.count += 1;
+      if (o.orcamento.status === "converted") existing.converted += 1;
+      clientMap.set(o.orcamento.clientId, existing);
+    }
+
+    // Seller analysis
+    const vendedorMap = new Map<string, { name: string; total: number; count: number; converted: number }>();
+    for (const o of allOrcamentos) {
+      if (!o.orcamento.vendedorId) continue;
+      const existing = vendedorMap.get(o.orcamento.vendedorId) ?? {
+        name: o.vendedorName || "Sem nome",
+        total: 0,
+        count: 0,
+        converted: 0,
+      };
+      existing.total += parseFloat(o.orcamento.total.toString());
+      existing.count += 1;
+      if (o.orcamento.status === "converted") existing.converted += 1;
+      vendedorMap.set(o.orcamento.vendedorId, existing);
+    }
+
+    // Ticket médio
+    const ticketMedio = totalOrçamentos > 0 ? valorTotalOrçado / totalOrçamentos : 0;
+    const ticketMedioConvertido = statusCounts.converted > 0 ? valorConvertido / statusCounts.converted : 0;
+
+    return {
+      periodo: { inicio: filters?.startDate || "Todos", fim: filters?.endDate || "Todos" },
+      resumo: {
+        totalOrçamentos,
+        valorTotalOrçado,
+        valorConvertido,
+        valorDescontos,
+        ticketMedio,
+        ticketMedioConvertido,
+        taxaConversão: totalOrçamentos > 0 ? (statusCounts.converted / totalOrçamentos) * 100 : 0,
+      },
+      porStatus: statusCounts,
+      produtosMaisOrçados: Array.from(productMap.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10),
+      porCliente: Array.from(clientMap.values())
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10),
+      porVendedor: Array.from(vendedorMap.values())
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10),
+      detalhes: allOrcamentos.map(o => ({
+        ...o.orcamento,
+        clientName: o.clientName,
+        vendedorName: o.vendedorName,
+      })),
+    };
+  }
+
+  // Notifications System
+  async createNotification(
+    userId: string,
+    type: string,
+    title: string,
+    message: string,
+    relatedId?: string
+  ): Promise<Notification> {
+    const [notification] = await db.insert(notifications).values({
+      userId,
+      type,
+      title,
+      message,
+      relatedId,
+    }).returning();
+    return notification;
+  }
+
+  async getNotifications(userId: string, unreadOnly?: boolean): Promise<Notification[]> {
+    const conditions = [eq(notifications.userId, userId)];
+    if (unreadOnly) {
+      conditions.push(eq(notifications.read, false));
+    }
+    return db
+      .select()
+      .from(notifications)
+      .where(and(...conditions))
+      .orderBy(sql`${notifications.createdAt} DESC`)
+      .limit(50);
+  }
+
+  async markNotificationAsRead(notificationId: string): Promise<boolean> {
+    const [updated] = await db
+      .update(notifications)
+      .set({ read: true })
+      .where(eq(notifications.id, notificationId))
+      .returning();
+    return !!updated;
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<number> {
+    const result = await db
+      .update(notifications)
+      .set({ read: true })
+      .where(and(eq(notifications.userId, userId), eq(notifications.read, false)))
+      .returning();
+    return result.length;
+  }
+
   // Cash Flow Entries - delete method
   async deleteCashFlowEntry(id: string): Promise<boolean> {
     const [deleted] = await db.delete(cashFlowEntries).where(eq(cashFlowEntries.id, id)).returning();
@@ -2671,6 +3241,20 @@ export class DatabaseStorage implements IStorage {
           fee_pix DECIMAL(5, 2) DEFAULT 0,
           company_id VARCHAR REFERENCES companies(id),
           active BOOLEAN DEFAULT true
+        );
+      `);
+
+      // Create notifications table if it doesn't exist
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS notifications (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id VARCHAR NOT NULL REFERENCES users(id),
+          type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          related_id VARCHAR,
+          read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
       `);
 
@@ -2718,6 +3302,61 @@ export class DatabaseStorage implements IStorage {
         END $$;
       `);
       console.log('✅ Campo "color" verificado/criado na tabela categories');
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS orcamentos (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          numero INTEGER NOT NULL,
+          client_id VARCHAR REFERENCES clients(id),
+          vendedor_id VARCHAR REFERENCES users(id),
+          company_id VARCHAR REFERENCES companies(id),
+          data DATE NOT NULL,
+          validade DATE NOT NULL,
+          subtotal DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          desconto DECIMAL(15, 2) DEFAULT 0,
+          frete DECIMAL(15, 2) DEFAULT 0,
+          impostos DECIMAL(15, 2) DEFAULT 0,
+          total DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'editing',
+          observacoes TEXT,
+          condicoes_pagamento TEXT,
+          desconto_percentual DECIMAL(5, 2) DEFAULT 0,
+          desconto_aprovado BOOLEAN DEFAULT FALSE,
+          desconto_aprovado_por VARCHAR REFERENCES users(id),
+          desconto_motivo TEXT,
+          account_receivable_id VARCHAR,
+          active BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS orcamento_itens (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          orcamento_id VARCHAR NOT NULL REFERENCES orcamentos(id) ON DELETE CASCADE,
+          produto_codigo TEXT,
+          produto_descricao TEXT NOT NULL,
+          unidade TEXT DEFAULT 'UN',
+          quantidade DECIMAL(10, 2) NOT NULL DEFAULT 1,
+          valor_unitario DECIMAL(15, 2) NOT NULL,
+          desconto_percentual DECIMAL(5, 2) DEFAULT 0,
+          desconto_valor DECIMAL(15, 2) DEFAULT 0,
+          subtotal DECIMAL(15, 2) NOT NULL
+        );
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS historico_orcamento (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          orcamento_id VARCHAR NOT NULL REFERENCES orcamentos(id) ON DELETE CASCADE,
+          usuario_id VARCHAR REFERENCES users(id),
+          acao TEXT NOT NULL,
+          descricao TEXT,
+          data_hora TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+      console.log('✅ Tabelas de orçamentos verificadas/criadas');
     } catch (error) {
       console.error('❌ Erro ao inicializar banco de dados:', error);
     }
