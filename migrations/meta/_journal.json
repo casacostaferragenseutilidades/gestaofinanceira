@@ -15,6 +15,13 @@
       "when": 1768668852609,
       "tag": "0001_first_mimic",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786557601504,
+      "tag": "0002_lying_namor",
+      "breakpoints": true
     }
   ]
 }
