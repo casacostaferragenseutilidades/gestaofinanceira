@@ -727,6 +727,162 @@ export type InsertNotification = {
 };
 export type Notification = typeof notifications.$inferSelect;
 
+// Ordens de Serviço (Service Orders)
+export const ordensServico = pgTable("ordens_servico", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  numero: integer("numero").notNull(),
+  orcamentoId: varchar("orcamento_id").references(() => orcamentos.id),
+  clientId: varchar("client_id").references(() => clients.id),
+  vendedorId: varchar("vendedor_id").references(() => users.id),
+  companyId: varchar("company_id").references(() => companies.id),
+  dataAbertura: date("data_abertura").notNull(),
+  dataPrevistaConclusao: date("data_prevista_conclusao"),
+  dataConclusao: date("data_conclusao"),
+  prioridade: text("prioridade").notNull().default("normal"),
+  status: text("status").notNull().default("aberta"),
+  descricaoProblema: text("descricao_problema").notNull(),
+  diagnostico: text("diagnostico"),
+  solucao: text("solucao"),
+  observacoes: text("observacoes"),
+  valorTotal: decimal("valor_total", { precision: 15, scale: 2 }).notNull().default("0"),
+  valorMaoObra: decimal("valor_mao_obra", { precision: 15, scale: 2 }).default("0"),
+  valorPecas: decimal("valor_pecas", { precision: 15, scale: 2 }).default("0"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const ordemServicoItens = pgTable("ordem_servico_itens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ordemServicoId: varchar("ordem_servico_id").references(() => ordensServico.id).notNull(),
+  produtoCodigo: text("produto_codigo"),
+  produtoDescricao: text("produto_descricao").notNull(),
+  unidade: text("unidade").default("UN"),
+  quantidade: decimal("quantidade", { precision: 10, scale: 2 }).notNull().default("1"),
+  valorUnitario: decimal("valor_unitario", { precision: 15, scale: 2 }).notNull(),
+  descontoPercentual: decimal("desconto_percentual", { precision: 5, scale: 2 }).default("0"),
+  descontoValor: decimal("desconto_valor", { precision: 15, scale: 2 }).default("0"),
+  subtotal: decimal("subtotal", { precision: 15, scale: 2 }).notNull(),
+  tipo: text("tipo").notNull().default("servico"),
+});
+
+export const historicoOrdemServico = pgTable("historico_ordem_servico", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ordemServicoId: varchar("ordem_servico_id").references(() => ordensServico.id).notNull(),
+  usuarioId: varchar("usuario_id").references(() => users.id),
+  acao: text("acao").notNull(),
+  descricao: text("descricao"),
+  dataHora: timestamp("data_hora").defaultNow(),
+});
+
+export const ordemServicoAnexos = pgTable("ordem_servico_anexos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ordemServicoId: varchar("ordem_servico_id").references(() => ordensServico.id).notNull(),
+  nomeArquivo: text("nome_arquivo").notNull(),
+  urlArquivo: text("url_arquivo").notNull(),
+  tipoArquivo: text("tipo_arquivo"),
+  descricao: text("descricao"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+});
+
+export type OrdemServicoStatus =
+  | "aberta"
+  | "em_andamento"
+  | "aguardando_peca"
+  | "aguardando_aprovacao"
+  | "concluida"
+  | "cancelada";
+
+export type OrdemServicoPrioridade =
+  | "baixa"
+  | "normal"
+  | "alta"
+  | "urgente";
+
+export type OrdemServicoItemTipo =
+  | "servico"
+  | "peca"
+  | "acessorio";
+
+export type OrdemServico = typeof ordensServico.$inferSelect;
+export type InsertOrdemServico = {
+  id?: string;
+  numero?: number;
+  orcamentoId?: string | null;
+  clientId?: string | null;
+  vendedorId?: string | null;
+  companyId?: string | null;
+  dataAbertura: string;
+  dataPrevistaConclusao?: string | null;
+  dataConclusao?: string | null;
+  prioridade?: string;
+  status?: string;
+  descricaoProblema: string;
+  diagnostico?: string | null;
+  solucao?: string | null;
+  observacoes?: string | null;
+  valorTotal?: string;
+  valorMaoObra?: string;
+  valorPecas?: string;
+  active?: boolean;
+};
+
+export type OrdemServicoItem = typeof ordemServicoItens.$inferSelect;
+export type InsertOrdemServicoItem = {
+  id?: string;
+  ordemServicoId?: string;
+  produtoCodigo?: string | null;
+  produtoDescricao: string;
+  unidade?: string;
+  quantidade?: string;
+  valorUnitario: string;
+  descontoPercentual?: string;
+  descontoValor?: string;
+  subtotal?: string;
+  tipo?: string;
+};
+
+export type HistoricoOrdemServico = typeof historicoOrdemServico.$inferSelect;
+export type InsertHistoricoOrdemServico = {
+  id?: string;
+  ordemServicoId: string;
+  usuarioId?: string | null;
+  acao: string;
+  descricao?: string | null;
+};
+
+export type OrdemServicoAnexo = typeof ordemServicoAnexos.$inferSelect;
+export type InsertOrdemServicoAnexo = {
+  id?: string;
+  ordemServicoId: string;
+  nomeArquivo: string;
+  urlArquivo: string;
+  tipoArquivo?: string | null;
+  descricao?: string | null;
+};
+
+export type OrdemServicoWithRelations = OrdemServico & {
+  clientName?: string;
+  vendedorName?: string;
+  companyName?: string;
+  orcamentoNumero?: number;
+  itens?: OrdemServicoItem[];
+  historico?: HistoricoOrdemServico[];
+  anexos?: OrdemServicoAnexo[];
+};
+
+export interface OrdemServicoDashboardStats {
+  totalHoje: number;
+  emAberto: number;
+  emAndamento: number;
+  aguardandoPeca: number;
+  aguardandoAprovacao: number;
+  concluidas: number;
+  canceladas: number;
+  valorTotal: number;
+  rankingTecnicos: { tecnicoId: string; tecnicoName: string; total: number; count: number }[];
+}
+
 export const insertOrcamentoSchema = createInsertSchema(orcamentos);
 export type InsertOrcamento = {
   id?: string;
@@ -792,6 +948,7 @@ export type OrcamentoStatus =
 export type OrcamentoWithRelations = Orcamento & {
   clientName?: string;
   vendedorName?: string;
+  companyName?: string;
   itens?: OrcamentoItem[];
   historico?: HistoricoOrcamento[];
 };

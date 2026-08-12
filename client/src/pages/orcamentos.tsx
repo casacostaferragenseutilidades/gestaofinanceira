@@ -29,6 +29,7 @@ import {
   BarChart3,
   MessageCircle,
   Mail,
+  Wrench,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -76,20 +77,35 @@ export default function OrcamentosPage() {
   const [pdfOrcamento, setPdfOrcamento] = useState<OrcamentoWithRelations | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [reportsOpen, setReportsOpen] = useState(false);
+  
+  // Empresa selecionada
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => {
+    const stored = localStorage.getItem('empresaAtiva');
+    if (stored) {
+      try {
+        const empresa = JSON.parse(stored);
+        return empresa.id || "all";
+      } catch (e) {
+        return "all";
+      }
+    }
+    return "all";
+  });
 
   // Fetch Dashboard Stats
   const { data: stats } = useQuery<OrcamentoDashboardStats>({
-    queryKey: ["/api/orcamentos/dashboard"],
+    queryKey: ["/api/orcamentos/dashboard", selectedCompanyId],
   });
 
   // Fetch Orcamentos List
   const { data: orcamentosList = [], isLoading } = useQuery<OrcamentoWithRelations[]>({
-    queryKey: ["/api/orcamentos", { status: statusFilter, search }],
+    queryKey: ["/api/orcamentos", { status: statusFilter, search, companyId: selectedCompanyId }],
     queryFn: async () => {
       let url = "/api/orcamentos";
       const params = new URLSearchParams();
       if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
       if (search) params.append("search", search);
+      if (selectedCompanyId && selectedCompanyId !== "all") params.append("companyId", selectedCompanyId);
       if (params.toString()) url += `?${params.toString()}`;
 
       const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -231,6 +247,37 @@ export default function OrcamentosPage() {
     
     const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.location.href = mailtoUrl;
+  };
+
+  const createOrdemServicoFromOrcamento = (orcamento: OrcamentoWithRelations) => {
+    // Abrir página de ordens de serviço com parâmetros pré-preenchidos
+    const params = new URLSearchParams();
+    params.append('orcamentoId', orcamento.id);
+    params.append('orcamentoNumero', orcamento.numero.toString());
+    params.append('clientId', orcamento.clientId || '');
+    params.append('valorTotal', orcamento.total.toString());
+    
+    // Armazenar no localStorage para ser usado no dialog
+    localStorage.setItem('novaOrdemServicoFromOrcamento', JSON.stringify({
+      orcamentoId: orcamento.id,
+      orcamentoNumero: orcamento.numero,
+      clientId: orcamento.clientId,
+      descricaoProblema: `Baseado no orçamento #${orcamento.numero}`,
+      itens: orcamento.itens?.map(item => ({
+        produtoCodigo: item.produtoCodigo,
+        produtoDescricao: item.produtoDescricao,
+        unidade: item.unidade,
+        quantidade: item.quantidade,
+        valorUnitario: item.valorUnitario,
+        descontoPercentual: item.descontoPercentual,
+        descontoValor: item.descontoValor,
+        subtotal: item.subtotal,
+        tipo: 'servico', // Converter itens para serviço por padrão
+      })) || []
+    }));
+    
+    // Navegar para a página de ordens de serviço
+    window.location.href = '/ordens-servico';
   };
 
   const formatDate = (dateStr: string) => {
@@ -450,6 +497,16 @@ export default function OrcamentosPage() {
                               >
                                 <Mail className="h-3.5 w-3.5 mr-2" />
                                 Enviar por E-mail
+                              </DropdownMenuItem>
+
+                              <DropdownMenuSeparator />
+
+                              <DropdownMenuItem
+                                onClick={() => createOrdemServicoFromOrcamento(orcamento)}
+                                className="text-purple-600 font-semibold"
+                              >
+                                <Wrench className="h-3.5 w-3.5 mr-2" />
+                                Criar Ordem de Serviço
                               </DropdownMenuItem>
 
                               {/* Aprovação do Gerente caso o desconto seja > 10% */}

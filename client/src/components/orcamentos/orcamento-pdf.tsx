@@ -49,6 +49,9 @@ export function OrcamentoPdf({ orcamento, onClose }: OrcamentoPdfProps) {
             <h1 className="text-2xl font-bold text-slate-900 uppercase tracking-wide">Orçamento #{orcamento.numero}</h1>
             <p className="text-sm text-slate-500 mt-1">Data: {formatDate(orcamento.data)}</p>
             <p className="text-sm text-slate-500">Validade: {formatDate(orcamento.validade)}</p>
+            {orcamento.companyName && (
+              <p className="text-sm text-slate-500 mt-1">Empresa: {orcamento.companyName}</p>
+            )}
           </div>
           <div className="text-right">
             <h2 className="text-xl font-bold text-blue-700">FinControl Gestão</h2>

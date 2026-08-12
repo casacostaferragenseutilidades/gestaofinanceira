@@ -7,6 +7,7 @@ import {
   accountsPayable, accountsReceivable, mercadoPagoTransactions, cashFlowEntries, balanceAdjustments, notes,
   financialGoals, companies, cardTransactions, bankAccounts, paymentConfigs, retailSales,
   orcamentos, orcamentoItens, historicoOrcamento, notifications,
+  ordensServico, ordemServicoItens, historicoOrdemServico, ordemServicoAnexos,
 } from "@shared/schema";
 import type {
   User, InsertUser,
@@ -30,6 +31,9 @@ import type {
   Note, InsertNote,
   FinancialGoal, InsertFinancialGoal, FinancialGoalProgress,
   Company, InsertCompany,
+  OrdemServico, InsertOrdemServico, OrdemServicoItem, InsertOrdemServicoItem,
+  HistoricoOrdemServico, InsertHistoricoOrdemServico, OrdemServicoAnexo, InsertOrdemServicoAnexo,
+  OrdemServicoWithRelations, OrdemServicoDashboardStats,
 } from "@shared/schema";
 
 
@@ -2681,10 +2685,12 @@ export class DatabaseStorage implements IStorage {
         orcamento: orcamentos,
         clientName: clients.name,
         vendedorName: users.fullName,
+        companyName: companies.nome,
       })
       .from(orcamentos)
       .leftJoin(clients, eq(orcamentos.clientId, clients.id))
       .leftJoin(users, eq(orcamentos.vendedorId, users.id))
+      .leftJoin(companies, eq(orcamentos.companyId, companies.id))
       .where(and(...conditions))
       .orderBy(sql`${orcamentos.createdAt} DESC`);
 
@@ -2692,6 +2698,7 @@ export class DatabaseStorage implements IStorage {
       ...r.orcamento,
       clientName: r.clientName ?? undefined,
       vendedorName: r.vendedorName ?? undefined,
+      companyName: r.companyName ?? undefined,
     }));
 
     if (filters?.search) {
@@ -2711,10 +2718,12 @@ export class DatabaseStorage implements IStorage {
         orcamento: orcamentos,
         clientName: clients.name,
         vendedorName: users.fullName,
+        companyName: companies.nome,
       })
       .from(orcamentos)
       .leftJoin(clients, eq(orcamentos.clientId, clients.id))
       .leftJoin(users, eq(orcamentos.vendedorId, users.id))
+      .leftJoin(companies, eq(orcamentos.companyId, companies.id))
       .where(eq(orcamentos.id, id));
 
     if (!row) return undefined;
@@ -2734,6 +2743,7 @@ export class DatabaseStorage implements IStorage {
       ...row.orcamento,
       clientName: row.clientName ?? undefined,
       vendedorName: row.vendedorName ?? undefined,
+      companyName: row.companyName ?? undefined,
       itens,
       historico,
     };
@@ -3304,6 +3314,71 @@ export class DatabaseStorage implements IStorage {
       console.log('✅ Campo "color" verificado/criado na tabela categories');
 
       await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS ordens_servico (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          numero INTEGER NOT NULL,
+          orcamento_id VARCHAR REFERENCES orcamentos(id),
+          client_id VARCHAR REFERENCES clients(id),
+          vendedor_id VARCHAR REFERENCES users(id),
+          company_id VARCHAR REFERENCES companies(id),
+          data_abertura DATE NOT NULL,
+          data_prevista_conclusao DATE,
+          data_conclusao DATE,
+          prioridade TEXT NOT NULL DEFAULT 'normal',
+          status TEXT NOT NULL DEFAULT 'aberta',
+          descricao_problema TEXT NOT NULL,
+          diagnostico TEXT,
+          solucao TEXT,
+          observacoes TEXT,
+          valor_total DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          valor_mao_obra DECIMAL(15, 2) DEFAULT 0,
+          valor_pecas DECIMAL(15, 2) DEFAULT 0,
+          active BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS ordem_servico_itens (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          ordem_servico_id VARCHAR NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE,
+          produto_codigo TEXT,
+          produto_descricao TEXT NOT NULL,
+          unidade TEXT DEFAULT 'UN',
+          quantidade DECIMAL(10, 2) NOT NULL DEFAULT 1,
+          valor_unitario DECIMAL(15, 2) NOT NULL,
+          desconto_percentual DECIMAL(5, 2) DEFAULT 0,
+          desconto_valor DECIMAL(15, 2) DEFAULT 0,
+          subtotal DECIMAL(15, 2) NOT NULL,
+          tipo TEXT NOT NULL DEFAULT 'servico'
+        );
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS historico_ordem_servico (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          ordem_servico_id VARCHAR NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE,
+          usuario_id VARCHAR REFERENCES users(id),
+          acao TEXT NOT NULL,
+          descricao TEXT,
+          data_hora TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS ordem_servico_anexos (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          ordem_servico_id VARCHAR NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE,
+          nome_arquivo TEXT NOT NULL,
+          url_arquivo TEXT NOT NULL,
+          tipo_arquivo TEXT,
+          descricao TEXT,
+          uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+
+      await db.execute(sql`
         CREATE TABLE IF NOT EXISTS orcamentos (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           numero INTEGER NOT NULL,
@@ -3360,6 +3435,277 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('❌ Erro ao inicializar banco de dados:', error);
     }
+  }
+
+  // ===== Ordens de Serviço =====
+
+  async getNextOrdemServicoNumero(companyId?: string): Promise<number> {
+    const conditions = [eq(ordensServico.active, true)];
+    if (companyId && companyId !== "all") {
+      conditions.push(eq(ordensServico.companyId, companyId));
+    }
+    const [result] = await db
+      .select({ maxNum: sql<number>`COALESCE(MAX(${ordensServico.numero}), 0)` })
+      .from(ordensServico)
+      .where(and(...conditions));
+    return (result?.maxNum ?? 0) + 1;
+  }
+
+  async getOrdensServico(companyId?: string, filters?: {
+    status?: string;
+    clientId?: string;
+    vendedorId?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+  }): Promise<OrdemServicoWithRelations[]> {
+    const conditions = [eq(ordensServico.active, true)];
+    if (companyId && companyId !== "all") {
+      conditions.push(eq(ordensServico.companyId, companyId));
+    }
+    if (filters?.status && filters.status !== "all") {
+      conditions.push(eq(ordensServico.status, filters.status));
+    }
+    if (filters?.clientId) {
+      conditions.push(eq(ordensServico.clientId, filters.clientId));
+    }
+    if (filters?.vendedorId) {
+      conditions.push(eq(ordensServico.vendedorId, filters.vendedorId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(ordensServico.dataAbertura, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(ordensServico.dataAbertura, filters.endDate));
+    }
+
+    const rows = await db
+      .select({
+        ordemServico: ordensServico,
+        clientName: clients.name,
+        vendedorName: users.fullName,
+        companyName: companies.nome,
+        orcamentoNumero: orcamentos.numero,
+      })
+      .from(ordensServico)
+      .leftJoin(clients, eq(ordensServico.clientId, clients.id))
+      .leftJoin(users, eq(ordensServico.vendedorId, users.id))
+      .leftJoin(companies, eq(ordensServico.companyId, companies.id))
+      .leftJoin(orcamentos, eq(ordensServico.orcamentoId, orcamentos.id))
+      .where(and(...conditions))
+      .orderBy(sql`${ordensServico.createdAt} DESC`);
+
+    let result: OrdemServicoWithRelations[] = rows.map(r => ({
+      ...r.ordemServico,
+      clientName: r.clientName ?? undefined,
+      vendedorName: r.vendedorName ?? undefined,
+      companyName: r.companyName ?? undefined,
+      orcamentoNumero: r.orcamentoNumero ?? undefined,
+    }));
+
+    if (filters?.search) {
+      const term = filters.search.toLowerCase();
+      result = result.filter(o =>
+        o.numero.toString().includes(term) ||
+        (o.clientName?.toLowerCase().includes(term)) ||
+        (o.descricaoProblema?.toLowerCase().includes(term))
+      );
+    }
+
+    return result;
+  }
+
+  async getOrdemServico(id: string): Promise<OrdemServicoWithRelations | undefined> {
+    const [row] = await db
+      .select({
+        ordemServico: ordensServico,
+        clientName: clients.name,
+        vendedorName: users.fullName,
+        companyName: companies.nome,
+        orcamentoNumero: orcamentos.numero,
+      })
+      .from(ordensServico)
+      .leftJoin(clients, eq(ordensServico.clientId, clients.id))
+      .leftJoin(users, eq(ordensServico.vendedorId, users.id))
+      .leftJoin(companies, eq(ordensServico.companyId, companies.id))
+      .leftJoin(orcamentos, eq(ordensServico.orcamentoId, orcamentos.id))
+      .where(eq(ordensServico.id, id));
+
+    if (!row) return undefined;
+
+    const itens = await db
+      .select()
+      .from(ordemServicoItens)
+      .where(eq(ordemServicoItens.ordemServicoId, id));
+
+    const historico = await db
+      .select()
+      .from(historicoOrdemServico)
+      .where(eq(historicoOrdemServico.ordemServicoId, id))
+      .orderBy(sql`${historicoOrdemServico.dataHora} DESC`);
+
+    const anexos = await db
+      .select()
+      .from(ordemServicoAnexos)
+      .where(eq(ordemServicoAnexos.ordemServicoId, id))
+      .orderBy(sql`${ordemServicoAnexos.uploadedAt} DESC`);
+
+    return {
+      ...row.ordemServico,
+      clientName: row.clientName ?? undefined,
+      vendedorName: row.vendedorName ?? undefined,
+      companyName: row.companyName ?? undefined,
+      orcamentoNumero: row.orcamentoNumero ?? undefined,
+      itens,
+      historico,
+      anexos,
+    };
+  }
+
+  async createOrdemServico(
+    data: InsertOrdemServico & { userId: string; companyId?: string },
+    itens: Omit<InsertOrdemServicoItem, "ordemServicoId">[]
+  ): Promise<OrdemServicoWithRelations> {
+    const numero = data.numero ?? await this.getNextOrdemServicoNumero(data.companyId);
+
+    const [newOrdemServico] = await db.insert(ordensServico).values({
+      ...data,
+      numero,
+      valorTotal: data.valorTotal?.toString() ?? "0",
+      valorMaoObra: data.valorMaoObra?.toString() ?? "0",
+      valorPecas: data.valorPecas?.toString() ?? "0",
+    }).returning();
+
+    if (itens.length > 0) {
+      await db.insert(ordemServicoItens).values(
+        itens.map(item => ({
+          ...item,
+          ordemServicoId: newOrdemServico.id,
+          quantidade: item.quantidade?.toString() ?? "1",
+          valorUnitario: item.valorUnitario.toString(),
+          descontoPercentual: item.descontoPercentual?.toString() ?? "0",
+          descontoValor: item.descontoValor?.toString() ?? "0",
+          subtotal: item.subtotal.toString(),
+        }))
+      );
+    }
+
+    await this.addHistoricoOrdemServico(newOrdemServico.id, data.userId, "created", "Ordem de serviço criada");
+
+    return (await this.getOrdemServico(newOrdemServico.id))!;
+  }
+
+  async updateOrdemServico(
+    id: string,
+    data: Partial<InsertOrdemServico>,
+    itens?: Omit<InsertOrdemServicoItem, "ordemServicoId">[],
+    userId?: string
+  ): Promise<OrdemServicoWithRelations | undefined> {
+    const updateData: any = { ...data, updatedAt: new Date() };
+    if (data.valorTotal !== undefined) updateData.valorTotal = data.valorTotal.toString();
+    if (data.valorMaoObra !== undefined) updateData.valorMaoObra = data.valorMaoObra.toString();
+    if (data.valorPecas !== undefined) updateData.valorPecas = data.valorPecas.toString();
+
+    await db.update(ordensServico).set(updateData).where(eq(ordensServico.id, id));
+
+    if (itens) {
+      await db.delete(ordemServicoItens).where(eq(ordemServicoItens.ordemServicoId, id));
+      if (itens.length > 0) {
+        await db.insert(ordemServicoItens).values(
+          itens.map(item => ({
+            ...item,
+            ordemServicoId: id,
+            quantidade: item.quantidade?.toString() ?? "1",
+            valorUnitario: item.valorUnitario.toString(),
+            descontoPercentual: item.descontoPercentual?.toString() ?? "0",
+            descontoValor: item.descontoValor?.toString() ?? "0",
+            subtotal: item.subtotal.toString(),
+          }))
+        );
+      }
+    }
+
+    if (userId) {
+      await this.addHistoricoOrdemServico(id, userId, "updated", "Ordem de serviço atualizada");
+    }
+
+    return await this.getOrdemServico(id);
+  }
+
+  async deleteOrdemServico(id: string, userId: string): Promise<void> {
+    await db.update(ordensServico).set({ active: false, updatedAt: new Date() }).where(eq(ordensServico.id, id));
+    await this.addHistoricoOrdemServico(id, userId, "deleted", "Ordem de serviço excluída");
+  }
+
+  async updateOrdemServicoStatus(id: string, status: string, userId: string, descricao?: string): Promise<OrdemServicoWithRelations | undefined> {
+    const updateData: any = { status, updatedAt: new Date() };
+    if (status === "concluida") {
+      updateData.dataConclusao = new Date().toISOString().split("T")[0];
+    }
+
+    await db.update(ordensServico).set(updateData).where(eq(ordensServico.id, id));
+    await this.addHistoricoOrdemServico(id, userId, "status_changed", `Status alterado para ${status}${descricao ? `: ${descricao}` : ""}`);
+    return await this.getOrdemServico(id);
+  }
+
+  async addHistoricoOrdemServico(ordemServicoId: string, userId: string, acao: string, descricao?: string): Promise<void> {
+    await db.insert(historicoOrdemServico).values({
+      ordemServicoId,
+      usuarioId: userId,
+      acao,
+      descricao,
+    });
+  }
+
+  async getOrdemServicoDashboardStats(companyId?: string, startDate?: string, endDate?: string): Promise<OrdemServicoDashboardStats> {
+    const today = new Date().toISOString().split("T")[0];
+    const all = await this.getOrdensServico(companyId, { startDate, endDate });
+
+    const hoje = all.filter(o => o.dataAbertura === today);
+    const emAberto = all.filter(o => o.status === "aberta");
+    const emAndamento = all.filter(o => o.status === "em_andamento");
+    const aguardandoPeca = all.filter(o => o.status === "aguardando_peca");
+    const aguardandoAprovacao = all.filter(o => o.status === "aguardando_aprovacao");
+    const concluidas = all.filter(o => o.status === "concluida");
+    const canceladas = all.filter(o => o.status === "cancelada");
+
+    const valorTotal = all.reduce((sum, o) => sum + parseFloat(o.valorTotal.toString()), 0);
+
+    const tecnicoMap = new Map<string, { tecnicoName: string; total: number; count: number }>();
+    for (const o of all) {
+      if (!o.vendedorId) continue;
+      const existing = tecnicoMap.get(o.vendedorId) ?? { tecnicoName: o.vendedorName ?? "Sem nome", total: 0, count: 0 };
+      existing.total += parseFloat(o.valorTotal.toString());
+      existing.count += 1;
+      tecnicoMap.set(o.vendedorId, existing);
+    }
+
+    return {
+      totalHoje: hoje.length,
+      emAberto: emAberto.length,
+      emAndamento: emAndamento.length,
+      aguardandoPeca: aguardandoPeca.length,
+      aguardandoAprovacao: aguardandoAprovacao.length,
+      concluidas: concluidas.length,
+      canceladas: canceladas.length,
+      valorTotal,
+      rankingTecnicos: Array.from(tecnicoMap.values())
+        .map(([tecnicoId, data]) => ({ tecnicoId, ...data }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10),
+    };
+  }
+
+  async addOrdemServicoAnexo(ordemServicoId: string, anexo: InsertOrdemServicoAnexo): Promise<OrdemServicoAnexo> {
+    const [newAnexo] = await db.insert(ordemServicoAnexos).values({
+      ...anexo,
+      ordemServicoId,
+    }).returning();
+    return newAnexo;
+  }
+
+  async deleteOrdemServicoAnexo(id: string): Promise<void> {
+    await db.delete(ordemServicoAnexos).where(eq(ordemServicoAnexos.id, id));
   }
 }
 

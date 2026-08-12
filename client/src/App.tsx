@@ -34,6 +34,7 @@ import ReceiptsControl from "@/pages/receipts-control";
 import PaymentSettings from "@/pages/payment-settings";
 import RetailSales from "@/pages/retail-sales";
 import OrcamentosPage from "@/pages/orcamentos";
+import OrdensServicoPage from "@/pages/ordens-servico";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/contas-receber" component={AccountsReceivable} />
       <Route path="/vendas-varejo" component={RetailSales} />
       <Route path="/orcamentos" component={OrcamentosPage} />
+      <Route path="/ordens-servico" component={OrdensServicoPage} />
       <Route path="/fluxo-caixa" component={CashFlow} />
       <Route path="/dre" component={DRE} />
       <Route path="/metas-financeiras" component={FinancialGoals} />

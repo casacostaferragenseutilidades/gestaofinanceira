@@ -1452,5 +1452,141 @@ export function registerRoutes(
     }
   });
 
+  // Ordens de Serviço Routes
+  app.get("/api/ordens-servico", requireViewer, async (req, res) => {
+    try {
+      let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+      if (Array.isArray(companyId)) { companyId = companyId.includes('all') ? 'all' : companyId[0]; }
+      else if (typeof companyId === 'string' && companyId.includes(',')) { const parts = companyId.split(','); companyId = parts.includes('all') ? 'all' : parts[0]; }
+
+      const ordensList = await storage.getOrdensServico(companyId, {
+        status: req.query.status as string,
+        clientId: req.query.clientId as string,
+        vendedorId: req.query.vendedorId as string,
+        startDate: req.query.startDate as string,
+        endDate: req.query.endDate as string,
+        search: req.query.search as string,
+      });
+      res.json(ordensList);
+    } catch (error: any) {
+      console.error("Error fetching ordens servico:", error);
+      res.status(500).json({ error: "Erro ao buscar ordens de serviço", details: error.message });
+    }
+  });
+
+  app.get("/api/ordens-servico/dashboard", requireViewer, async (req, res) => {
+    try {
+      let companyId = req.query.companyId as string || req.headers['x-company-id'] as string;
+      if (Array.isArray(companyId)) { companyId = companyId.includes('all') ? 'all' : companyId[0]; }
+
+      const stats = await storage.getOrdemServicoDashboardStats(
+        companyId,
+        req.query.startDate as string,
+        req.query.endDate as string
+      );
+      res.json(stats);
+    } catch (error: any) {
+      console.error("Error fetching ordem servico dashboard:", error);
+      res.status(500).json({ error: "Erro ao buscar dashboard", details: error.message });
+    }
+  });
+
+  app.get("/api/ordens-servico/:id", requireViewer, async (req, res) => {
+    try {
+      const ordem = await storage.getOrdemServico(req.params.id);
+      if (!ordem) return res.status(404).json({ error: "Ordem de serviço não encontrada" });
+      res.json(ordem);
+    } catch (error: any) {
+      console.error("Error fetching ordem servico:", error);
+      res.status(500).json({ error: "Erro ao buscar ordem de serviço", details: error.message });
+    }
+  });
+
+  app.post("/api/ordens-servico", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const companyId = req.headers['x-company-id'] as string || undefined;
+      const { itens, ...ordemData } = req.body;
+
+      const ordem = await storage.createOrdemServico(
+        {
+          ...ordemData,
+          vendedorId: ordemData.vendedorId || userId,
+          userId,
+          companyId,
+          status: ordemData.status || "aberta",
+        },
+        itens || []
+      );
+      res.status(201).json(ordem);
+    } catch (error: any) {
+      console.error("Error creating ordem servico:", error);
+      res.status(400).json({ error: "Erro ao criar ordem de serviço", details: error.message });
+    }
+  });
+
+  app.patch("/api/ordens-servico/:id", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const { itens, ...ordemData } = req.body;
+      const ordem = await storage.updateOrdemServico(req.params.id, ordemData, itens, userId);
+      if (!ordem) return res.status(404).json({ error: "Ordem de serviço não encontrada" });
+      res.json(ordem);
+    } catch (error: any) {
+      console.error("Error updating ordem servico:", error);
+      res.status(400).json({ error: "Erro ao atualizar ordem de serviço", details: error.message });
+    }
+  });
+
+  app.delete("/api/ordens-servico/:id", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      await storage.deleteOrdemServico(req.params.id, userId);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting ordem servico:", error);
+      res.status(500).json({ error: "Erro ao excluir ordem de serviço", details: error.message });
+    }
+  });
+
+  app.patch("/api/ordens-servico/:id/status", requireFinancial, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+      const { status, descricao } = req.body;
+      const ordem = await storage.updateOrdemServicoStatus(req.params.id, status, userId, descricao);
+      if (!ordem) return res.status(404).json({ error: "Ordem de serviço não encontrada" });
+      res.json(ordem);
+    } catch (error: any) {
+      console.error("Error updating ordem servico status:", error);
+      res.status(400).json({ error: "Erro ao atualizar status", details: error.message });
+    }
+  });
+
+  app.post("/api/ordens-servico/:id/anexos", requireFinancial, async (req, res) => {
+    try {
+      const anexo = await storage.addOrdemServicoAnexo(req.params.id, req.body);
+      res.status(201).json(anexo);
+    } catch (error: any) {
+      console.error("Error adding anexo:", error);
+      res.status(400).json({ error: "Erro ao adicionar anexo", details: error.message });
+    }
+  });
+
+  app.delete("/api/ordens-servico/:id/anexos/:anexoId", requireFinancial, async (req, res) => {
+    try {
+      await storage.deleteOrdemServicoAnexo(req.params.anexoId);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting anexo:", error);
+      res.status(500).json({ error: "Erro ao excluir anexo", details: error.message });
+    }
+  });
+
   return httpServer;
 }

@@ -209,10 +209,15 @@ export function OrcamentoDialog({ open, onOpenChange, orcamentoToEdit }: Orcamen
         itens: formattedItens,
       };
 
+      const headers: Record<string, string> = {};
+      if (companyId) {
+        headers['x-company-id'] = companyId;
+      }
+
       if (orcamentoToEdit) {
-        return apiRequest("PATCH", `/api/orcamentos/${orcamentoToEdit.id}`, payload);
+        return apiRequest("PATCH", `/api/orcamentos/${orcamentoToEdit.id}`, payload, headers);
       } else {
-        return apiRequest("POST", "/api/orcamentos", payload);
+        return apiRequest("POST", "/api/orcamentos", payload, headers);
       }
     },
     onSuccess: () => {
