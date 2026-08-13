@@ -66,6 +66,11 @@ const navGroups: NavGroup[] = [
     items: [
       { title: "Orçamentos", url: "/orcamentos", icon: FileSpreadsheet },
       { title: "Ordens de Serviço", url: "/ordens-servico", icon: Wrench, badge: "new" },
+    ],
+  },
+  {
+    label: "Financeiro",
+    items: [
       { title: "Contas a Pagar", url: "/contas-pagar", icon: CreditCard, badge: "urgent" },
       { title: "Contas a Receber", url: "/contas-receber", icon: Wallet },
       { title: "Recebimentos PDR", url: "/controle-recebimentos", icon: RefreshCw },
